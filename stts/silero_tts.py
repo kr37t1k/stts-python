@@ -7,8 +7,8 @@ import yaml
 import requests
 from loguru import logger
 from number2text.number2text import NumberToText
-from silero_tts.lang_data import is_cyrillic, is_latin, lang_data
-from silero_tts.transliterate import reverse_transliterate, transliterate
+from stts.lang_data import is_cyrillic, is_latin, lang_data
+from stts.transliterate import reverse_transliterate, transliterate
 
 class SileroTTS:
     def __init__(self, model_id: str, language: str, speaker: str = None, sample_rate: int = 48000, device: str = 'cpu',

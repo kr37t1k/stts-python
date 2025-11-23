@@ -36,3 +36,5 @@ __pycache__/
 .DS_Store
 Thumbs.db
 ```
+/stts/silero_models/kseniya_v2_ru.pt
+.qodo

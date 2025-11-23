@@ -3,7 +3,7 @@ import os
 import sys
 from loguru import logger
 from tqdm import tqdm
-from silero_tts.silero_tts import SileroTTS
+from stts.silero_tts import SileroTTS
 
 def main():
     parser = argparse.ArgumentParser(description='Silero TTS CLI')
