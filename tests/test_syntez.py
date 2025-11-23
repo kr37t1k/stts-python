@@ -25,17 +25,17 @@ def create_test_env():
     if not os.path.exists(venv_path):
         subprocess.check_call([sys.executable, "-m", "venv", venv_path])
 
-# Функция для установки silero-tts в виртуальное окружение
+# Функция для установки stts в виртуальное окружение
 def install_silero_tts():
     # Укажи путь к локальному wheel-файлу или имя пакета на PyPI
-    package = "C:\\WEB\\photo-session\\silero_cli\\dist\silero_tts-0.0.2-py3-none-any.whl"  # или 'silero-tts'
+    package = "C:\\WEB\\photo-session\\silero_cli\\dist\stts-0.0.2-py3-none-any.whl"  # или 'stts'
     subprocess.check_call([f"{venv_path}/Scripts/pip", "install", package])
 
 # Фикстура для создания и активации тестового окружения
 @pytest.fixture(scope="session", autouse=True)
 def test_env():
     create_test_env()
-    install_silero_tts()
+    install_stts()
 
     # Добавляем путь к виртуальному окружению в sys.path
     sys.path.insert(0, os.path.join(venv_path, "lib", "python3.x", "site-packages"))
@@ -56,7 +56,7 @@ def test_console_text_to_speech():
     with open(input_text, "w") as f:
         f.write("Привет, мир!")
     # 
-    os.system(f"{tests_temp_path}/venv/Scripts/python -m silero_tts --language ru  --text {input_text} --output-file {tests_temp_path}/test_output.wav")
+    os.system(f"{tests_temp_path}/venv/Scripts/python -m stts --language ru  --text {input_text} --output-file {tests_temp_path}/test_output.wav")
 
     check_audio_file(os.path.join(tests_temp_path, "test_output.wav"))
 
@@ -79,7 +79,7 @@ def test_batch_processing():
         with open(os.path.join(texts_dir, f"text_{i}.txt"), "w") as f:
             f.write(f"Тестовый текст {i}")
 
-    os.system(f"{tests_temp_path}/venv/Scripts/python -m silero_tts --language ru --input-dir {texts_dir} --output-dir {tests_temp_path}/test_audio")
+    os.system(f"{tests_temp_path}/venv/Scripts/python -m stts --language ru --input-dir {texts_dir} --output-dir {tests_temp_path}/test_audio")
 
     for i in range(3):
         check_audio_file(os.path.join(tests_temp_path, "test_audio", f"text_{i}.wav"))

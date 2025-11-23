@@ -51,7 +51,7 @@ def test_silero_tts_validation():
 def test_silero_tts_with_none_speaker():
     """Test initialization with None speaker (should auto-select)"""
     # Mock the model to avoid actual model loading
-    with patch('silero_tts.silero_tts.SileroTTS.init_model') as mock_init_model:
+    with patch('stts.silero_tts.SileroTTS.init_model') as mock_init_model:
         mock_model = MagicMock()
         mock_model.speakers = ['speaker1', 'speaker2']
         mock_init_model.return_value = mock_model
@@ -68,7 +68,7 @@ def test_silero_tts_with_none_speaker():
 def test_silero_tts_with_none_speaker_no_speakers():
     """Test initialization with None speaker when no speakers available"""
     # Mock the model to avoid actual model loading
-    with patch('silero_tts.silero_tts.SileroTTS.init_model') as mock_init_model:
+    with patch('stts.silero_tts.SileroTTS.init_model') as mock_init_model:
         mock_model = MagicMock()
         mock_model.speakers = []  # No speakers available
         mock_init_model.return_value = mock_model

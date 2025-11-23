@@ -1,6 +1,6 @@
 # lang_data.py
 
-from silero_tts.transliterate import transliterate,reverse_transliterate
+from stts.transliterate import transliterate,reverse_transliterate
 
 lang_data = {
     'ru': {
