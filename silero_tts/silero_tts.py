@@ -13,6 +13,30 @@ from silero_tts.transliterate import reverse_transliterate, transliterate
 class SileroTTS:
     def __init__(self, model_id: str, language: str, speaker: str = None, sample_rate: int = 48000, device: str = 'cpu',
                  put_accent=True, put_yo=True, num_threads=6):
+        """
+        Initialize the SileroTTS model with proper validation and error handling.
+        
+        Args:
+            model_id (str): ID of the model to use
+            language (str): Language code for the model
+            speaker (str, optional): Speaker name. If None, first available speaker is used
+            sample_rate (int): Audio sample rate (default: 48000)
+            device (str): Device to use ('cpu', 'cuda', 'auto') (default: 'cpu')
+            put_accent (bool): Whether to put accents (default: True)
+            put_yo (bool): Whether to put 'yo' (default: True)
+            num_threads (int): Number of threads for torch (default: 6)
+        """
+        if not model_id or not isinstance(model_id, str):
+            raise ValueError("model_id must be a non-empty string")
+        if not language or not isinstance(language, str):
+            raise ValueError("language must be a non-empty string")
+        if not isinstance(sample_rate, int) or sample_rate <= 0:
+            raise ValueError("sample_rate must be a positive integer")
+        if device not in ['cpu', 'cuda', 'auto']:
+            raise ValueError("device must be one of 'cpu', 'cuda', or 'auto'")
+        if not isinstance(num_threads, int) or num_threads <= 0:
+            raise ValueError("num_threads must be a positive integer")
+            
         self.model_id = model_id
         self.language = language
         self.sample_rate = sample_rate
@@ -25,7 +49,10 @@ class SileroTTS:
         self.tts_model = self.init_model()
 
         if speaker is None:
-            self.speaker = self.tts_model.speakers[0]
+            if hasattr(self.tts_model, 'speakers') and self.tts_model.speakers:
+                self.speaker = self.tts_model.speakers[0]
+            else:
+                raise ValueError("No speakers available for the selected model")
         else:
             self.speaker = speaker
 
@@ -49,19 +76,38 @@ class SileroTTS:
         return models_config
 
     def download_models_config(self, models_file=None):
+        """
+        Download the models configuration file with retry and error handling.
+        """
         url = "https://raw.githubusercontent.com/snakers4/silero-models/master/models.yml"
-        response = requests.get(url)
         
         if models_file is None:
             models_file = os.path.join(os.path.dirname(__file__), 'models.yml')
 
-        if response.status_code == 200:
-            with open(models_file, 'w', encoding='utf-8') as f:
-                f.write(response.text)
-            logger.success(f"Models config file downloaded: {models_file}")
-        else:
-            logger.error(f"Failed to download models config file. Status code: {response.status_code}")
-            raise Exception(f"Failed to download models config file. Status code: {response.status_code}")
+        try:
+            import time
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    response = requests.get(url, timeout=30)
+                    if response.status_code == 200:
+                        with open(models_file, 'w', encoding='utf-8') as f:
+                            f.write(response.text)
+                        logger.success(f"Models config file downloaded: {models_file}")
+                        return
+                    else:
+                        logger.warning(f"Failed to download models config file. Status code: {response.status_code}. Attempt {attempt + 1}/{max_retries}")
+                except requests.exceptions.RequestException as e:
+                    logger.warning(f"Network error during download: {str(e)}. Attempt {attempt + 1}/{max_retries}")
+                    if attempt < max_retries - 1:
+                        time.sleep(2 ** attempt)  # Exponential backoff
+            
+            logger.error(f"Failed to download models config file after {max_retries} attempts")
+            raise Exception(f"Failed to download models config file after {max_retries} attempts")
+            
+        except Exception as e:
+            logger.error(f"Error downloading models config: {str(e)}")
+            raise
 
     def get_available_speakers(self):
         return self.tts_model.speakers
@@ -145,9 +191,13 @@ class SileroTTS:
         logger.success(f"Sample rate changed to: {sample_rate}")
 
     def init_model(self):
-        logger.info("Initializing model")
+        """
+        Initialize the TTS model with proper error handling and resource management.
+        """
+        logger.info(f"Initializing model '{self.model_id}' for language '{self.language}'")
         t0 = timeit.default_timer()
 
+        # Set device properly
         if not torch.cuda.is_available() and self.device == "auto":
             self.device = 'cpu'
         if torch.cuda.is_available() and (self.device == "auto" or self.device == "cuda"):
@@ -164,7 +214,12 @@ class SileroTTS:
             os.makedirs(silero_models_dir)
 
         # Get package URL from models config
-        package_url = self.models_config['tts_models'][self.language][self.model_id]['latest']['package']
+        try:
+            model_config = self.models_config['tts_models'][self.language][self.model_id]['latest']
+            package_url = model_config['package']
+        except KeyError as e:
+            logger.error(f"Model configuration not found for language '{self.language}', model '{self.model_id}': {e}")
+            raise ValueError(f"Model configuration not found for language '{self.language}', model '{self.model_id}'")
 
         # Define model file path
         model_file_name = f"{self.model_id}_{self.language}.pt"
@@ -173,23 +228,43 @@ class SileroTTS:
         # Download model file if not exists
         if not os.path.exists(model_file_path):
             logger.info(f"Downloading model from {package_url} to {model_file_path}")
-            response = requests.get(package_url, stream=True)
-            if response.status_code == 200:
-                with open(model_file_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        f.write(chunk)
-                logger.success(f"Model downloaded successfully.")
-            else:
-                logger.error(f"Failed to download model file. Status code: {response.status_code}")
-                raise Exception(f"Failed to download model file. Status code: {response.status_code}")
+            try:
+                import time
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        response = requests.get(package_url, stream=True, timeout=60)
+                        if response.status_code == 200:
+                            with open(model_file_path, 'wb') as f:
+                                for chunk in response.iter_content(chunk_size=8192):
+                                    if chunk:  # Filter out keep-alive chunks
+                                        f.write(chunk)
+                            logger.success(f"Model downloaded successfully.")
+                            break
+                        else:
+                            logger.warning(f"Failed to download model file. Status code: {response.status_code}. Attempt {attempt + 1}/{max_retries}")
+                    except requests.exceptions.RequestException as e:
+                        logger.warning(f"Network error during model download: {str(e)}. Attempt {attempt + 1}/{max_retries}")
+                        if attempt < max_retries - 1:
+                            time.sleep(2 ** attempt)  # Exponential backoff
+                        else:
+                            logger.error(f"Failed to download model file after {max_retries} attempts")
+                            raise Exception(f"Failed to download model file after {max_retries} attempts")
+            except Exception as e:
+                logger.error(f"Error downloading model: {str(e)}")
+                raise
 
         # Load model from local file
         logger.info("Loading model")
         t1 = timeit.default_timer()
-        from torch.package import PackageImporter
-        model = PackageImporter(model_file_path).load_pickle("tts_models", "model")
-        model.to(torch_dev)
-        logger.info(f"Model to device takes {timeit.default_timer() - t1:.2f} seconds")
+        try:
+            from torch.package import PackageImporter
+            model = PackageImporter(model_file_path).load_pickle("tts_models", "model")
+            model.to(torch_dev)
+            logger.info(f"Model to device takes {timeit.default_timer() - t1:.2f} seconds")
+        except Exception as e:
+            logger.error(f"Error loading model from {model_file_path}: {str(e)}")
+            raise
 
         if torch.cuda.is_available() and (self.device == "auto" or self.device == "cuda"):
             logger.info("Synchronizing CUDA")
@@ -262,6 +337,18 @@ class SileroTTS:
         return preprocessed_lines
 
     def tts(self, text, output_file):
+        """
+        Generate speech from text and save to output file.
+        
+        Args:
+            text (str): Text to convert to speech
+            output_file (str): Path to output audio file
+        """
+        if not text or not isinstance(text, str):
+            raise ValueError("text must be a non-empty string")
+        if not output_file or not isinstance(output_file, str):
+            raise ValueError("output_file must be a non-empty string")
+            
         # Основной метод для генерации речи
         preprocessed_lines = self.preprocess_text(text)
 
@@ -278,9 +365,16 @@ class SileroTTS:
                                                  sample_rate=self.sample_rate,
                                                  put_accent=self.put_accent,
                                                  put_yo=self.put_yo)
-                wf.writeframes((audio * 32767).numpy().astype('int16'))
+                # Ensure audio is properly formatted
+                if audio is not None and len(audio) > 0:
+                    wf.writeframes((audio * 32767).numpy().astype('int16'))
+                else:
+                    logger.warning(f'Empty audio returned for line: {line}')
             except ValueError as e:
                 logger.warning(f'TTS failed for line: {line}. Error: {str(e)}. Skipping...')
+            except Exception as e:
+                logger.error(f'Unexpected error during TTS for line: {line}. Error: {str(e)}. Skipping...')
+                continue
 
         wf.close()
         logger.success(f'Speech saved to {output_file}')

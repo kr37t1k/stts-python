@@ -1,4 +1,4 @@
-# Silero TTS v0.1 - Stable Release
+# Silero TTS
 
 **README is available in the following languages:**
 
@@ -10,26 +10,23 @@ Silero TTS is a Python library that provides an easy way to synthesize speech fr
 ## Features
 
 - Support for multiple languages and models
-- Automatic downloading of the latest model configuration file with retry logic
+- Automatic downloading of the latest model configuration file
 - Text preprocessing and transliteration
 - Batch processing of text files
 - Detailed logging with loguru
 - Progress tracking with tqdm
 - Customizable options for sample rate, device, and more
 - Can be used as a standalone script or integrated into Python code
-- Robust error handling and validation
-- Network resilience with retry mechanisms
 
 ## Installation
 
-### Auto (Recommended)
-
+### Auto ( Recomended )
+ 
    ```
    pip install silero-tts
    ```
 
-### Manually
-
+### Manualy
 1. Clone the repository:
    ```
    git clone https://github.com/daswer123/silero-tts-enhanced
@@ -70,17 +67,17 @@ python -m silero_tts [options]
 
 1. Synthesize speech from a text:
    ```
-   python -m silero_tts --language ru --text "Привет, мир!"
+   python silero_tts.py --language ru --text "Привет, мир!"
    ```
 
 2. Synthesize speech from a text file:
    ```
-   python -m silero_tts --language en --input-file input.txt --output-file output.wav
+   python silero_tts.py --language en --input-file input.txt --output-file output.wav
    ```
 
 3. Synthesize speech from multiple text files in a directory:
    ```
-   python -m silero_tts --language es --input-dir texts --output-dir audio
+   python silero_tts.py --language es --input-dir texts --output-dir audio
    ```
 
 ### As a Python Library
@@ -154,7 +151,6 @@ The Silero TTS CLI provides the following features:
 - **Output**: Specify the output audio file using the `--output-file` flag or the output directory for batch processing using the `--output-dir` flag.
 - **Model Listing**: List all available models using the `--list-models` flag.
 - **Speaker Listing**: List all available speakers for a specific model using the `--list-speakers` flag.
-- **Error Handling**: Comprehensive error handling with retry mechanisms for network operations.
 
 ## Supported Languages
 
@@ -170,16 +166,6 @@ The Silero TTS CLI provides the following features:
 - Ukrainian (ua)
 - Indic (indic)
 - Cyrillic (cyrillic)
-
-## Stability Features (v0.1)
-
-- Input validation for all parameters
-- Network resilience with retry mechanisms and timeouts
-- Graceful error handling with informative messages
-- Proper resource management
-- Comprehensive logging for debugging
-- KeyboardInterrupt handling in CLI
-- Robust model loading with fallbacks
 
 ## License
 

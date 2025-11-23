@@ -103,16 +103,28 @@ def main():
                         os.makedirs(args.output_dir)
 
                     txt_files = [f for f in os.listdir(args.input_dir) if f.endswith('.txt')]
+                    if not txt_files:
+                        logger.warning(f"No .txt files found in directory: {args.input_dir}")
+                        return
+                        
                     logger.info(f"Found {len(txt_files)} text files in directory: {args.input_dir}")
 
                     for txt_file in tqdm(txt_files, desc="Synthesizing"):
                         input_path = os.path.join(args.input_dir, txt_file)
                         output_path = os.path.join(args.output_dir, f"{os.path.splitext(txt_file)[0]}.wav")
-                        tts.from_file(input_path, output_path)
+                        try:
+                            tts.from_file(input_path, output_path)
+                        except Exception as e:
+                            logger.error(f"Error processing file {input_path}: {str(e)}")
+                            continue
 
                     logger.success(f"Batch synthesis completed. Output files saved in: {args.output_dir}")
+    except KeyboardInterrupt:
+        logger.info("Operation interrupted by user.")
+        sys.exit(1)
     except Exception as e:
         logger.exception(f"An error occurred: {str(e)}")
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()
