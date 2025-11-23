@@ -70,17 +70,17 @@ python -m stts [options]
 
 1. Synthesize speech from a text:
    ```
-   python -m silero_tts --language ru --text "Привет, мир!"
+   python -m stts --language ru --text "Привет, мир!"
    ```
 
 2. Synthesize speech from a text file:
    ```
-   python -m silero_tts --language en --input-file input.txt --output-file output.wav
+   python -m stts --language en --input-file input.txt --output-file output.wav
    ```
 
 3. Synthesize speech from multiple text files in a directory:
    ```
-   python -m silero_tts --language es --input-dir texts --output-dir audio
+   python -m stts --language es --input-dir texts --output-dir audio
    ```
 
 ### As a Python Library
