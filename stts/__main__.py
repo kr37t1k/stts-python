@@ -20,6 +20,12 @@ def main():
     parser.add_argument('--output-file', type=str, default='output.wav', help='Output audio file (default: output.wav)')
     parser.add_argument('--output-dir', type=str, default='output', help='Output directory for synthesized audio files (default: output)')
     parser.add_argument('--log-level', type=str, default='INFO', help='Logging level (default: INFO)')
+    parser.add_argument('--put-accent', action='store_true', default=True, help='Put accent (default: True)')
+    parser.add_argument('--no-put-accent', dest='put_accent', action='store_false', help='Do not put accent')
+    parser.add_argument('--put-yo', action='store_true', default=True, help='Put yo (default: True)')
+    parser.add_argument('--no-put-yo', dest='put_yo', action='store_false', help='Do not put yo')
+    parser.add_argument('--line-length-limit', type=int, default=1000, help='Max line length (default: 1000)')
+    parser.add_argument('--num-threads', type=int, default=6, help='Number of torch threads (default: 6)')
     args = parser.parse_args()
 
     # Set logging level
@@ -73,7 +79,9 @@ def main():
 
             logger.info(f"Initializing TTS with model: {args.model}, language: {args.language}, speaker: {args.speaker}")
             tts = SileroTTS(model_id=args.model, language=args.language, speaker=args.speaker,
-                            sample_rate=args.sample_rate, device=args.device)
+                            sample_rate=args.sample_rate, device=args.device, put_accent=args.put_accent, 
+                            put_yo=args.put_yo, num_threads=args.num_threads)
+            tts.LINE_LENGTH_LIMIT = args.line_length_limit  # Set the line length limit
             logger.success(f"TTS initialized successfully.")
 
             if not args.speaker:

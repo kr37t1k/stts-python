@@ -6,6 +6,7 @@ import wave
 import yaml
 import requests
 from loguru import logger
+from datetime import datetime, timedelta
 from number2text.number2text import NumberToText
 from stts.lang_data import is_cyrillic, is_latin, lang_data
 from stts.transliterate import reverse_transliterate, transliterate
@@ -70,6 +71,8 @@ class SileroTTS:
         self.wave_channels = 1  # Mono
         self.wave_header_size = 44  # Bytes
         self.wave_sample_width = int(16 / 8)  # 16 bits == 2 bytes
+        self.LINE_LENGTH_LIMIT = 1000  # Default line length limit
+        self.WAVE_FILE_SIZE_LIMIT = 512 * 1024 * 1024  # 512 MiB - Max file size
 
     def load_models_config(self):
         models_file = os.path.join(os.path.dirname(__file__), 'latest_silero_models.yml')
@@ -411,48 +414,208 @@ class SileroTTS:
 
         return preprocessed_lines
 
-    def tts(self, text, output_file):
+    def spell_digits(self, line: str, lang: str = None) -> str:
+        """Enhanced digit spelling based on language."""
+        if lang is None:
+            lang = self.language
+        if lang == 'ru':
+            try:
+                import re
+                digits = re.findall(r'\d+', line)
+                # Sort digits from largest to smallest
+                digits = sorted(digits, key=len, reverse=True)
+                for digit in digits:
+                     # Limit to 12 digits for num2t4ru
+                     line = line.replace(digit, self.converter.convert(int(digit[:12])), 1) # Replace one at a time to avoid overlap issues
+            except (ValueError, IndexError):
+                logger.warning(f"Warning: Could not convert digit '{digit[:12]}' to text, leaving as-is.")
+                # If num2t4ru fails, leave the digit as is
+                pass
+        else:
+            # For other languages, basic handling (could be expanded)
+            # Example: Replace percentages, decimals, etc., as needed per language
+            line = re.sub(r'(\d+)\.(\d+)', r'\1 point \2', line) # Basic decimal handling for non-Russian
+        return line
+
+    def preprocess_text(self, text, length_limit: int = None):
+        if length_limit is None:
+            length_limit = self.LINE_LENGTH_LIMIT
+            
+        logger.info(f"Preprocessing text with line length limit={length_limit}")
+        if length_limit > 3:
+            length_limit = length_limit - 2  # Keep a room for trailing char and '\n' char
+        else:
+            logger.error(f"ERROR: line length limit must be >= 3, got {length_limit}")
+            raise ValueError(f"line length limit must be >= 3, got {length_limit}")
+
+        preprocessed_text_len = 0
+        preprocessed_lines = []
+        
+        # Split text into lines
+        lines = text.split('\n') if isinstance(text, str) else text
+        
+        for line_num, line in enumerate(lines):
+            line = line.strip()  # Remove leading/trailing spaces
+            if not line: # Handles empty lines or just '\n'
+                continue
+
+            # --- Preprocessing based on language/model specifics ---
+            # Replace chars not supported by many models
+            line = line.replace("…", "...")  # Common replacement
+            line = line.replace("*", " star ") # Example replacement
+            line = re.sub(r'(\d+)[,](\d+)', r'\1 \2', line) # Handle commas in numbers if needed, context-dependent
+            line = line.replace("%", " percent ") # Example replacement
+            # Add more language-specific replacements here if needed
+
+            # Spell digits (language-aware)
+            line = self.spell_digits(line, self.language)
+
+            # --- Splitting Logic ---
+            while len(line) > 0:
+                if len(line) <= length_limit:
+                    line = line + "\n"
+                    preprocessed_lines.append(line)
+                    preprocessed_text_len += len(line)
+                    break
+
+                # Find position to split line between sentences/punctuation
+                split_pos = 0
+                for char in ['.', '!', '?', ';', ':', ',']: # Order matters
+                    pos = line.rfind(char, 0, length_limit)
+                    if pos > split_pos:
+                        split_pos = pos
+                # If punctuation found, split after it
+                if split_pos > 0:
+                     part = line[:split_pos + 1] + "\n"
+                     preprocessed_lines.append(part)
+                     preprocessed_text_len += len(part)
+                     line = line[split_pos + 1:].lstrip() # Remove leading spaces after split
+                     continue
+
+                # If no punctuation found, try splitting on space
+                split_pos = line.rfind(' ', 0, length_limit)
+                if split_pos > 0:
+                     part = line[:split_pos] + "\n"
+                     preprocessed_lines.append(part)
+                     preprocessed_text_len += len(part)
+                     line = line[split_pos + 1:].lstrip() # Remove leading spaces after split
+                     continue
+
+                # If no space found, force split at limit
+                logger.warning(f"Warning: Forcing split at line {line_num+1} at char {length_limit}. This might cause unnatural breaks.")
+                part = line[:length_limit] + "\n"
+                preprocessed_lines.append(part)
+                preprocessed_text_len += len(part)
+                line = line[length_limit:].lstrip() # Remove leading spaces after forced split
+
+        return preprocessed_lines, preprocessed_text_len
+
+    def tts(self, text, output_file, progress_callback=None):
         """
-        Generate speech from text and save to output file.
+        Generate speech from text and save to output file with enhanced error handling and progress tracking.
         
         Args:
             text (str): Text to convert to speech
             output_file (str): Path to output audio file
+            progress_callback (callable, optional): Function to call with progress updates
         """
         if not text or not isinstance(text, str):
             raise ValueError("text must be a non-empty string")
         if not output_file or not isinstance(output_file, str):
             raise ValueError("output_file must be a non-empty string")
             
-        # Основной метод для генерации речи
-        preprocessed_lines = self.preprocess_text(text)
+        # Preprocess text with length limit
+        preprocessed_lines, preprocessed_text_len = self.preprocess_text(text)
+        
+        # Initialize Stats object
+        s = self.Stats(preprocessed_text_len)
+        audio_size = self.wave_header_size
+        wave_file_number = 0
+        current_line_idx = 0
 
-        # Инициализируем wav-файл
-        wf = self.init_wave_file(output_file)
+        # Generate initial output filename
+        base_output_file = output_file.rsplit('.', 1)[0]  # Remove extension
+        output_filename = f'{base_output_file}_{self.speaker}_{wave_file_number}.wav'
+        wf = self.init_wave_file(output_filename)
+        logger.info(f"Writing to: {output_filename}")
 
         logger.info("Starting TTS")
-        # Синтезируем речь и пишем в файл
-        for i, line in enumerate(preprocessed_lines):
-            logger.info(f'Processing line {i+1}/{len(preprocessed_lines)}: {line}')
-            try:
-                audio = self.tts_model.apply_tts(text=line,
-                                                 speaker=self.speaker,
-                                                 sample_rate=self.sample_rate,
-                                                 put_accent=self.put_accent,
-                                                 put_yo=self.put_yo)
-                # Ensure audio is properly formatted
-                if audio is not None and len(audio) > 0:
-                    wf.writeframes((audio * 32767).numpy().astype('int16'))
-                else:
-                    logger.warning(f'Empty audio returned for line: {line}')
-            except ValueError as e:
-                logger.warning(f'TTS failed for line: {line}. Error: {str(e)}. Skipping...')
-            except Exception as e:
-                logger.error(f'Unexpected error during TTS for line: {line}. Error: {str(e)}. Skipping...')
+        # Process each preprocessed line
+        for line in preprocessed_lines:
+            if not line.strip(): # Skip empty lines after stripping
                 continue
 
+            # Progress and status print
+            if current_line_idx % 10 == 0: # Print every 10 lines or adjust frequency
+                 progress_info = (
+                     f'Line {current_line_idx+1}/{len(preprocessed_lines)} | '
+                     f'Done: {s.done_percent:.1f}% | '
+                     f'Time: {s.run_time}/{s.run_time_est} | '
+                     f'TTS: {s.tts_time_current}/{s.tts_time_est} | '
+                     f'File: {s.wave_mib}/{s.wave_mib_est} MiB'
+                 )
+                 logger.info(progress_info)
+                 if progress_callback:
+                     progress_callback(s)
+
+            try:
+                # --- Apply TTS ---
+                audio = self.tts_model.apply_tts(
+                    text=line.strip(), # Ensure no leading/trailing newlines passed to TTS
+                    speaker=self.speaker,
+                    sample_rate=self.sample_rate,
+                    put_accent=self.put_accent,
+                    put_yo=self.put_yo
+                )
+
+                # --- Handle Audio Output ---
+                if audio is not None and len(audio) > 0:
+                    audio_int16 = (audio * 32767).numpy().astype('int16')
+                    audio_bytes = audio_int16.tobytes()
+                    chunk_size_bytes = len(audio_bytes)
+
+                    # Check if adding this chunk exceeds the file size limit
+                    if audio_size + chunk_size_bytes > self.WAVE_FILE_SIZE_LIMIT:
+                        logger.info(f"File size limit ({self.WAVE_FILE_SIZE_LIMIT} bytes) reached. Starting new file...")
+                        wf.close()
+                        s.next_file()
+                        wave_file_number += 1
+                        audio_size = self.wave_header_size # Reset size for new file
+                        output_filename = f'{base_output_file}_{self.speaker}_{wave_file_number}.wav'
+                        wf = self.init_wave_file(output_filename)
+                        logger.info(f"Writing to: {output_filename}")
+
+                    # Write the audio chunk
+                    wf.writeframes(audio_bytes)
+                    audio_size += chunk_size_bytes
+                    s.update(line, chunk_size_bytes) # Update stats with actual bytes written
+                else:
+                    logger.warning(f"Warning: TTS returned no audio for line: {line[:50]}...") # Log short snippet
+                    s.update(line, 0) # Still update stats for progress, even if no audio
+
+            except RuntimeError as e:
+                if "out of memory" in str(e).lower():
+                     logger.warning(f"RuntimeError (likely OOM): {e}")
+                     logger.info(f"Consider reducing sample_rate, using 'cpu' device, or simplifying the input line: {line[:50]}...")
+                     # Optionally, try to continue with next line or exit gracefully
+                     s.update(line, 0) # Update stats and continue
+                else:
+                     logger.error(f"RuntimeError during TTS for line: {line[:50]}... Error: {e}")
+                     # Decide: continue, exit, or try fallback (e.g., skip line)
+                     s.update(line, 0) # For now, update and continue
+            except ValueError as e:
+                 logger.error(f"ValueError during TTS for line: {line[:50]}... Error: {e}")
+                 # Handle potential model-specific errors (e.g., unsupported characters after preprocessing)
+                 s.update(line, 0) # Update stats and continue
+            except Exception as e:
+                 logger.error(f"Unexpected error during TTS for line: {line[:50]}... Error: {e}")
+                 s.update(line, 0) # Update stats and continue
+
+            current_line_idx += 1
+
+        # Close the final wave file
         wf.close()
-        logger.success(f'Speech saved to {output_file}')
+        logger.success(f'Speech saved to {output_filename}')
 
     def init_wave_file(self, path):
         logger.info(f'Initializing wave file: {path}')
@@ -462,13 +625,73 @@ class SileroTTS:
         wf.setframerate(self.sample_rate)
         return wf
 
-    def from_file(self, text_path, output_path):
+    class Stats:
+        def __init__(self, preprocessed_text_len: int):
+            self.start_time = int(datetime.now().timestamp())
+            self.preprocessed_text_len = preprocessed_text_len
+            self.processed_text_len = 0
+            self.done_percent = 0.0
+            self.warmup_seconds = 0
+            self.run_time = "0:00:00"
+            self.run_time_est = "0:00:00"
+            self.wave_data_current = 0
+            self.wave_data_total = 0
+            self.wave_mib = 0
+            self.wave_mib_est = 0
+            self.tts_time = "0:00:00"
+            self.tts_time_est = "0:00:00"
+            self.tts_time_current = "0:00:00"
+            self.line_number = 0
+            self.first_tts_start_time = None # Track for warmup
+
+        def update(self, line: str, audio_chunk_size: int):
+            self.line_number += 1
+            self.wave_data_total += audio_chunk_size
+            self.wave_data_current += audio_chunk_size
+            self.processed_text_len += len(line)
+
+            # Percentage calculation
+            self.done_percent = round(self.processed_text_len * 100 / self.preprocessed_text_len, 1)
+
+            # Wave size estimation
+            self.wave_mib = int((self.wave_data_total / 1024 / 1024))
+            self.wave_mib_est = int(
+                (self.wave_data_total / 1024 / 1024 * self.preprocessed_text_len / self.processed_text_len))
+
+            # Warmup estimation (using first TTS call)
+            if self.first_tts_start_time is None:
+                self.first_tts_start_time = int(datetime.now().timestamp())
+
+            # Run time estimation
+            current_time = int(datetime.now().timestamp())
+            if self.first_tts_start_time:
+                 run_time_s = current_time - self.first_tts_start_time
+                 run_time_est_s = int(run_time_s * self.preprocessed_text_len / max(self.processed_text_len, 1)) # Avoid div by 0
+                 self.run_time = str(timedelta(seconds=run_time_s))
+                 self.run_time_est = str(timedelta(seconds=run_time_est_s))
+            else:
+                 self.run_time = "0:00:00"
+                 self.run_time_est = "0:00:00"
+
+
+            # TTS time estimation (based on audio length)
+            tts_time_s = int((self.wave_data_total / self.wave_channels / self.wave_sample_width / self.sample_rate))
+            tts_time_est_s = int((tts_time_s * self.preprocessed_text_len / max(self.processed_text_len, 1))) # Avoid div by 0
+            self.tts_time = str(timedelta(seconds=tts_time_s))
+            self.tts_time_est = str(timedelta(seconds=tts_time_est_s))
+            tts_time_current_s = int((self.wave_data_current / self.wave_channels / self.wave_sample_width / self.sample_rate))
+            self.tts_time_current = str(timedelta(seconds=tts_time_current_s))
+
+        def next_file(self):
+            self.wave_data_current = 0
+
+    def from_file(self, text_path, output_path, progress_callback=None):
         # Метод для генерации речи из текстового файла
         logger.info(f'Generating speech from file: {text_path}')
-        with open(text_path, 'r') as f:
+        with open(text_path, 'r', encoding='utf-8') as f:
             text = f.read()
 
-        self.tts(text, output_path)
+        self.tts(text, output_path, progress_callback=progress_callback)
 
     @staticmethod
     def get_available_models():

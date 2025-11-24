@@ -5,7 +5,8 @@ import re
 import sys
 import timeit
 import wave
-import sounddevice as sd, soundfile as sf
+import sounddevice as sd
+import soundfile as sf
 from datetime import datetime, timedelta
 from loguru import logger
 
