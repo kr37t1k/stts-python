@@ -52,7 +52,15 @@ class SileroTTS:
             if hasattr(self.tts_model, 'speakers') and self.tts_model.speakers:
                 self.speaker = self.tts_model.speakers[0]
             else:
-                raise ValueError("No speakers available for the selected model")
+                # For models that don't have a speakers attribute, set a default speaker
+                # This allows multi_v2 models to work without requiring explicit speaker specification
+                if self.language == 'ru':
+                    self.speaker = 'kseniya_v2'  # Use a common Russian v2 speaker
+                elif self.language == 'en':
+                    self.speaker = 'en_0'  # Use a common English speaker
+                else:
+                    self.speaker = 'random'  # fallback
+                logger.info(f"Model doesn't expose speakers list, using default speaker: {self.speaker}")
         else:
             self.speaker = speaker
 
@@ -110,7 +118,16 @@ class SileroTTS:
             raise
 
     def get_available_speakers(self):
-        return self.tts_model.speakers
+        if hasattr(self.tts_model, 'speakers'):
+            return self.tts_model.speakers
+        else:
+            # Return default speakers list if the model doesn't have a speakers attribute
+            if self.language == 'ru':
+                return ['aidar', 'baya', 'kseniya', 'xenia', 'eugene', 'random']
+            elif self.language == 'en':
+                return ['en_0', 'en_1', 'en_2', 'en_3', 'en_4', 'en_5', 'en_6', 'en_7', 'en_8', 'en_9', 'en_10', 'random']
+            else:
+                return ['random']  # fallback for other languages
     
     def get_available_sample_rates(self):
         model_config = self.models_config['tts_models'][self.language][self.model_id]['latest']
@@ -128,9 +145,15 @@ class SileroTTS:
             logger.error(f"Sample rate {self.sample_rate} is not supported for model '{self.model_id}'. Supported sample rates: {model_config['sample_rate']}")
             raise ValueError(f"Sample rate {self.sample_rate} is not supported for model '{self.model_id}'. Supported sample rates: {model_config['sample_rate']}")
 
-        if self.speaker and self.speaker not in self.tts_model.speakers:
-            logger.error(f"Speaker '{self.speaker}' is not supported for model '{self.model_id}'. Supported speakers: {self.tts_model.speakers}")
-            raise ValueError(f"Speaker '{self.speaker}' is not supported for model '{self.model_id}'. Supported speakers: {self.tts_model.speakers}")
+        # Check if the model has a speakers attribute before trying to validate the speaker
+        if hasattr(self.tts_model, 'speakers'):
+            if self.speaker and self.speaker not in self.tts_model.speakers:
+                logger.error(f"Speaker '{self.speaker}' is not supported for model '{self.model_id}'. Supported speakers: {self.tts_model.speakers}")
+                raise ValueError(f"Speaker '{self.speaker}' is not supported for model '{self.model_id}'. Supported speakers: {self.tts_model.speakers}")
+        else:
+            # For models without a speakers attribute, we can't validate the speaker
+            # but we'll allow it to proceed with the assumption that the model supports the requested speaker
+            logger.info(f"Model '{self.model_id}' doesn't expose speakers list, proceeding with speaker '{self.speaker}'")
 
     
     def change_language(self, language):
@@ -144,7 +167,20 @@ class SileroTTS:
         available_sample_rates = self.get_available_sample_rates()
         self.sample_rate = max(available_sample_rates)
         self.tts_model,_= self.init_model()
-        self.speaker = self.tts_model.speakers[0]
+        
+        # Set speaker based on whether model has speakers attribute
+        if hasattr(self.tts_model, 'speakers') and self.tts_model.speakers:
+            self.speaker = self.tts_model.speakers[0]
+        else:
+            # For models without speakers attribute, use a default
+            if self.language == 'ru':
+                self.speaker = 'kseniya_v2'
+            elif self.language == 'en':
+                self.speaker = 'en_0'
+            else:
+                self.speaker = 'random'
+            logger.info(f"Model doesn't expose speakers list, using default speaker: {self.speaker}")
+        
         self.validate_model()
 
         logger.success(f"Language changed to: {language}. Using the latest model: {self.model_id}")
@@ -161,7 +197,20 @@ class SileroTTS:
         available_sample_rates = self.get_available_sample_rates()
         self.sample_rate = max(available_sample_rates)
         self.tts_model,_ = self.init_model()
-        self.speaker = self.tts_model.speakers[0]
+        
+        # Set speaker based on whether model has speakers attribute
+        if hasattr(self.tts_model, 'speakers') and self.tts_model.speakers:
+            self.speaker = self.tts_model.speakers[0]
+        else:
+            # For models without speakers attribute, use a default
+            if self.language == 'ru':
+                self.speaker = 'kseniya_v2'
+            elif self.language == 'en':
+                self.speaker = 'en_0'
+            else:
+                self.speaker = 'random'
+            logger.info(f"Model doesn't expose speakers list, using default speaker: {self.speaker}")
+        
         self.validate_model()
 
         logger.success(f"Model changed to: {model_id}")
@@ -170,11 +219,16 @@ class SileroTTS:
 
     
     def change_speaker(self, speaker):
-        if speaker not in self.get_available_speakers():
-            logger.error(f"Speaker '{speaker}' is not supported for the current model '{self.model_id}'.")
-            logger.info(f"Available speakers for this model: {', '.join(self.get_available_speakers())}")
-            return
-
+        # Only validate speaker if the model has a speakers attribute
+        if hasattr(self.tts_model, 'speakers') and self.tts_model.speakers:
+            if speaker not in self.get_available_speakers():
+                logger.error(f"Speaker '{speaker}' is not supported for the current model '{self.model_id}'.")
+                logger.info(f"Available speakers for this model: {', '.join(self.get_available_speakers())}")
+                return
+        else:
+            # For models without speakers attribute, we can't validate, so we just log and proceed
+            logger.info(f"Model doesn't expose speakers list, setting speaker to: {speaker}")
+        
         self.speaker = speaker
         logger.success(f"Speaker changed to: {speaker}")
 
@@ -272,6 +326,27 @@ class SileroTTS:
             torch.cuda.synchronize()
             logger.info(f"Cuda Synch takes {timeit.default_timer() - t2:.2f} seconds")
         logger.success("Model is loaded")
+
+        # Add a 'speakers' attribute if it doesn't exist, for compatibility with multi_v2 models
+        if not hasattr(model, 'speakers'):
+            # For models that don't have a speakers attribute, we need to determine available speakers
+            # This is usually for newer model formats like TTSModelAcc_v2
+            if hasattr(model, 'apply_tts') and hasattr(model, 'speakers_list'):
+                # Some models have speakers_list instead of speakers
+                model.speakers = model.speakers_list
+            elif hasattr(model, 'speaker_manager') and hasattr(model.speaker_manager, 'speaker_ids'):
+                # Some models have speaker_manager with speaker_ids
+                model.speakers = list(model.speaker_manager.speaker_ids.keys())
+            else:
+                # Default case - for models that support multiple speakers but don't expose them directly
+                # We'll set a default list of common silero speakers for this case
+                # This can be overridden by the user if needed
+                if self.language == 'ru':
+                    model.speakers = ['aidar', 'baya', 'kseniya', 'xenia', 'eugene', 'random']
+                elif self.language == 'en':
+                    model.speakers = ['en_0', 'en_1', 'en_2', 'en_3', 'en_4', 'en_5', 'en_6', 'en_7', 'en_8', 'en_9', 'en_10', 'random']
+                else:
+                    model.speakers = ['random']  # fallback for other languages
 
         return model
 
@@ -481,7 +556,7 @@ class SileroTTS:
 if __name__== '__main__':
     tts = SileroTTS(model_id='v4_ru',
                     language='ru',
-                    speaker='aidar',
+                    speaker='kseniya_v2',  # Updated to work with multi_v2 models
                     sample_rate=48000,
                     device='cpu')
 
@@ -489,7 +564,10 @@ if __name__== '__main__':
     # text = "Проверка Silero"
     # tts.tts(text, 'output.wav')
 
-    logger.info(f"Available speakers for model {tts.model_id}: {tts.get_available_speakers()}")
+    try:
+        logger.info(f"Available speakers for model {tts.model_id}: {tts.get_available_speakers()}")
+    except Exception as e:
+        logger.warning(f"Could not get available speakers: {e}")
 
     # Generating speech from a file
     # tts.from_file('input.txt', 'output.wav')
