@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="silerotts",
-    version="0.6.0",
+    version="0.6.1",
     description="Python package for using Silero TTS",
     author="kr37t1k",
     author_email="egorakentiev28@gmail.com",

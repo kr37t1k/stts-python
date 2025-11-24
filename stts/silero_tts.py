@@ -623,6 +623,7 @@ class SileroTTS:
         sd.play(data=sf_file, samplerate=self.sample_rate, blocking=True)
         sd.wait()
         print(f"Wave export file playing: {output_filename}...")
+        return output_filename
 
     def init_wave_file(self, path):
         logger.info(f'Initializing wave file: {path}')
