@@ -1,4 +1,7 @@
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse, StreamingResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 import tempfile
@@ -6,6 +9,13 @@ import os
 import base64
 import io
 import uuid
+import asyncio
+from pathlib import Path
+
+# Get the directory where this file is located
+APP_DIR = Path(__file__).parent
+TEMPLATES_DIR = APP_DIR / "templates"
+STATIC_DIR = APP_DIR / "static"
 
 # Import SileroTTS with error handling
 try:
@@ -16,10 +26,27 @@ except ImportError as e:
     SileroTTS = None
     SILEROTTS_AVAILABLE = False
 
-app = FastAPI(title="SileroTTS API Server", version="1.0.0")
+app = FastAPI(
+    title="SileroTTS API Server",
+    version="0.7",
+    description="Text-to-Speech API with audio streaming support"
+)
+
+# CORS middleware for global access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Global instance to hold the current TTS instance
 current_tts_instance = None
+
+# Temp directory for audio files
+AUDIO_DIR = Path(tempfile.gettempdir()) / "stts_audio"
+AUDIO_DIR.mkdir(exist_ok=True)
 
 
 class ModelInfo(BaseModel):
@@ -40,11 +67,11 @@ class TTSRequest(BaseModel):
     speaker: Optional[str] = None
     sample_rate: Optional[int] = None
     device: Optional[str] = "cpu"
-    output_format: Optional[str] = "wav"  # Format of the output audio
+    output_format: Optional[str] = "wav"
 
 
 class TTSResponse(BaseModel):
-    audio_data: str  # Base64 encoded audio data
+    audio_data: str
     output_file: str
     duration: float
     sample_rate: int
@@ -61,9 +88,111 @@ class SettingsUpdate(BaseModel):
     num_threads: Optional[int] = None
 
 
+def get_model_id_for_language(language: str) -> str:
+    """Get default model ID for a language."""
+    language_models = {
+        "en": "v3_en",
+        "ru": "v4_ru",
+        "de": "thorsten_v2",
+        "es": "tux_v2",
+        "fr": "gilles_v2",
+        "uk": "v4_uk",
+        "uz": "v3_uz",
+    }
+    return language_models.get(language, "v4_ru")
+
+
+def get_default_speaker(language: str) -> str:
+    """Get default speaker for a language."""
+    if language == "en":
+        return "en_0"
+    return "kseniya_v2"
+
+
+@app.get("/ui")
+async def get_ui():
+    """Serve the modern web UI."""
+    ui_file = TEMPLATES_DIR / "index.html"
+    if ui_file.exists():
+        return HTMLResponse(content=ui_file.read_text(encoding="utf-8"), media_type="text/html")
+    else:
+        raise HTTPException(status_code=404, detail="UI not found. Create templates/index.html")
+
+
+def get_or_create_tts_instance(
+    model_id: str = None,
+    language: str = "ru",
+    speaker: str = None,
+    sample_rate: int = 48000,
+    device: str = "cpu"
+) -> SileroTTS:
+    """Get or create TTS instance with specified parameters."""
+    global current_tts_instance
+    
+    if not model_id:
+        model_id = get_model_id_for_language(language)
+    
+    if not speaker:
+        speaker = get_default_speaker(language)
+    
+    # Create new instance if needed
+    if (current_tts_instance is None or
+        model_id != current_tts_instance.model_id or
+        language != current_tts_instance.language or
+        speaker != current_tts_instance.speaker or
+        sample_rate != current_tts_instance.sample_rate or
+        device != current_tts_instance.device):
+        
+        current_tts_instance = SileroTTS(
+            model_id=model_id,
+            language=language,
+            speaker=speaker,
+            sample_rate=sample_rate,
+            device=device
+        )
+    
+    return current_tts_instance
+
+
+def generate_audio_file(
+    tts: SileroTTS,
+    text: str,
+    file_id: str = None
+) -> str:
+    """Generate audio file and return path."""
+    if file_id is None:
+        file_id = str(uuid.uuid4())
+    
+    output_path = AUDIO_DIR / f"tts_{file_id}.wav"
+    result_file = tts.tts(str(text), str(output_path))
+    return result_file
+
+
+@app.get("/")
+async def root():
+    """Root endpoint to check if server is running."""
+    return {
+        "message": "SileroTTS API Server v2.0 is running!",
+        "ui": "/ui",
+        "docs": "/docs",
+        "endpoints": {
+            "POST /tts": "Generate TTS - returns base64 audio (JSON)",
+            "POST /tts/audio": "Generate TTS - returns audio file directly",
+            "POST /tts/stream": "Generate TTS - streams audio response",
+            "GET /tts/audio": "GET version for browser testing",
+            "GET /tts/stream": "GET version for browser testing",
+            "GET /models": "List available models",
+            "GET /settings": "Get current settings",
+            "POST /settings": "Update settings",
+            "DELETE /cache": "Clear temporary audio cache"
+        },
+        "version": "2.0.0"
+    }
+
+
 @app.get("/models")
 async def get_models():
-    """Get available models information"""
+    """Get available models information."""
     if not SILEROTTS_AVAILABLE:
         raise HTTPException(status_code=500, detail="SileroTTS library not available")
     
@@ -71,7 +200,6 @@ async def get_models():
         models = SileroTTS.get_available_models()
         languages = SileroTTS.get_available_languages()
         
-        # Get current model info if there's an active instance
         current_model_info = {}
         if current_tts_instance:
             current_model_info = {
@@ -92,92 +220,177 @@ async def get_models():
 
 
 @app.post("/tts")
-async def generate_tts(request: TTSRequest):
-    """Generate speech from text using the TTS model"""
+async def generate_tts_json(request: TTSRequest):
+    """Generate speech from text - returns base64 encoded audio in JSON."""
     if not SILEROTTS_AVAILABLE:
         raise HTTPException(status_code=500, detail="SileroTTS library not available")
     
-    global current_tts_instance
-    
     try:
-        # Determine the model_id based on the language if not provided
-        model_id = request.model_id
         language = request.language or "ru"
+        model_id = request.model_id or get_model_id_for_language(language)
         
-        # If no model_id is provided, select a default model based on language
-        if not model_id:
-            if language == "en":
-                model_id = "lj_v2"  # English model
-            elif language == "ru":
-                model_id = "v4_ru"  # Russian model
-            elif language == "de":
-                model_id = "thorsten_v2"  # German model
-            elif language == "es":
-                model_id = "tux_v2"  # Spanish model
-            elif language == "fr":
-                model_id = "gilles_v2"  # French model
-            else:
-                # Default to Russian model if language is not recognized
-                model_id = "v4_ru"
+        tts = get_or_create_tts_instance(
+            model_id=model_id,
+            language=language,
+            speaker=request.speaker,
+            sample_rate=request.sample_rate or 48000,
+            device=request.device or "cpu"
+        )
         
-        # If no current instance exists, create one with defaults
-        if current_tts_instance is None:
-            current_tts_instance = SileroTTS(
-                model_id=model_id,
-                language=language,
-                speaker=request.speaker or "en_0" if language == "en" else "kseniya_v2",
-                sample_rate=request.sample_rate or 48000,
-                device=request.device or "cpu"
-            )
+        file_id = str(uuid.uuid4())
+        output_path = AUDIO_DIR / f"tts_{file_id}.wav"
         
-        # If request specifies different parameters, create new instance
-        if (model_id != current_tts_instance.model_id or
-            language != current_tts_instance.language or
-            (request.speaker and request.speaker != current_tts_instance.speaker) or
-            (request.sample_rate and request.sample_rate != current_tts_instance.sample_rate) or
-            (request.device and request.device != current_tts_instance.device)):
-            
-            current_tts_instance = SileroTTS(
-                model_id=model_id,
-                language=language,
-                speaker=request.speaker or current_tts_instance.speaker,
-                sample_rate=request.sample_rate or current_tts_instance.sample_rate,
-                device=request.device or current_tts_instance.device
-            )
+        result_file = tts.tts(request.text, str(output_path))
         
-        # Generate temporary file for output
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
-            output_path = temp_file.name
-        
-        # Generate speech
-        result_file = current_tts_instance.tts(request.text, output_path)
-        
-        # Read the generated audio file and encode it as base64
         with open(result_file, 'rb') as audio_file:
             audio_data = base64.b64encode(audio_file.read()).decode('utf-8')
         
-        # Get file size to calculate duration (assuming 16-bit, mono)
         file_stats = os.stat(result_file)
-        duration = file_stats.st_size / (current_tts_instance.sample_rate * 2)  # 2 bytes per sample for 16-bit
-        
-        # Clean up temporary file
-        if os.path.exists(result_file):
-            os.remove(result_file)
+        duration = file_stats.st_size / (tts.sample_rate * 2)
         
         return TTSResponse(
             audio_data=audio_data,
             output_file=result_file,
             duration=duration,
-            sample_rate=current_tts_instance.sample_rate
+            sample_rate=tts.sample_rate
         )
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating TTS: {str(e)}")
 
 
+@app.post("/tts/audio")
+async def generate_tts_audio(request: TTSRequest):
+    """
+    Generate speech from text - returns audio file directly.
+    Use this endpoint for global access and direct audio playback.
+    """
+    if not SILEROTTS_AVAILABLE:
+        raise HTTPException(status_code=500, detail="SileroTTS library not available")
+    
+    try:
+        language = request.language or "ru"
+        model_id = request.model_id or get_model_id_for_language(language)
+        
+        tts = get_or_create_tts_instance(
+            model_id=model_id,
+            language=language,
+            speaker=request.speaker,
+            sample_rate=request.sample_rate or 48000,
+            device=request.device or "cpu"
+        )
+        
+        file_id = str(uuid.uuid4())
+        output_path = AUDIO_DIR / f"tts_{file_id}.wav"
+        
+        result_file = tts.tts(request.text, str(output_path))
+        
+        # Generate filename for download
+        filename = f"tts_{language}_{file_id[:8]}.wav"
+        
+        return FileResponse(
+            path=result_file,
+            media_type="audio/wav",
+            filename=filename
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating TTS: {str(e)}")
+
+
+@app.post("/tts/stream")
+async def generate_tts_stream(request: TTSRequest):
+    """
+    Generate speech from text - streams audio response.
+    Best for real-time playback and reduces latency.
+    """
+    if not SILEROTTS_AVAILABLE:
+        raise HTTPException(status_code=500, detail="SileroTTS library not available")
+    
+    try:
+        language = request.language or "ru"
+        model_id = request.model_id or get_model_id_for_language(language)
+        
+        tts = get_or_create_tts_instance(
+            model_id=model_id,
+            language=language,
+            speaker=request.speaker,
+            sample_rate=request.sample_rate or 48000,
+            device=request.device or "cpu"
+        )
+        
+        file_id = str(uuid.uuid4())
+        output_path = AUDIO_DIR / f"tts_{file_id}.wav"
+        
+        result_file = tts.tts(request.text, str(output_path))
+        
+        # Stream the file
+        def iter_file():
+            with open(result_file, 'rb') as f:
+                while chunk := f.read(8192):
+                    yield chunk
+        
+        filename = f"tts_{language}_{file_id[:8]}.wav"
+        
+        return StreamingResponse(
+            iter_file(),
+            media_type="audio/wav",
+            headers={
+                "Content-Disposition": f"inline; filename={filename}",
+                "Accept-Ranges": "bytes"
+            }
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating TTS: {str(e)}")
+
+
+# Query-based endpoints for easy browser testing
+@app.get("/tts/audio")
+async def generate_tts_audio_get(
+    text: str = Query(..., description="Text to convert to speech"),
+    language: str = Query("ru", description="Language code"),
+    model_id: str = Query(None, description="Model ID"),
+    speaker: str = Query(None, description="Speaker name"),
+    sample_rate: int = Query(48000, description="Sample rate"),
+    device: str = Query("cpu", description="Device (cpu/cuda)")
+):
+    """GET version of /tts/audio for browser testing."""
+    request = TTSRequest(
+        text=text,
+        language=language,
+        model_id=model_id,
+        speaker=speaker,
+        sample_rate=sample_rate,
+        device=device
+    )
+    return await generate_tts_audio(request)
+
+
+@app.get("/tts/stream")
+async def generate_tts_stream_get(
+    text: str = Query(..., description="Text to convert to speech"),
+    language: str = Query("ru", description="Language code"),
+    model_id: str = Query(None, description="Model ID"),
+    speaker: str = Query(None, description="Speaker name"),
+    sample_rate: int = Query(48000, description="Sample rate"),
+    device: str = Query("cpu", description="Device (cpu/cuda)")
+):
+    """GET version of /tts/stream for browser testing."""
+    request = TTSRequest(
+        text=text,
+        language=language,
+        model_id=model_id,
+        speaker=speaker,
+        sample_rate=sample_rate,
+        device=device
+    )
+    return await generate_tts_stream(request)
+
+
 @app.get("/settings")
 async def get_settings():
-    """Get current settings of the TTS instance"""
+    """Get current settings of the TTS instance."""
     if not SILEROTTS_AVAILABLE:
         raise HTTPException(status_code=500, detail="SileroTTS library not available")
     
@@ -203,7 +416,7 @@ async def get_settings():
 
 @app.post("/settings")
 async def update_settings(settings: SettingsUpdate):
-    """Update settings of the TTS instance"""
+    """Update settings of the TTS instance."""
     if not SILEROTTS_AVAILABLE:
         raise HTTPException(status_code=500, detail="SileroTTS library not available")
     
@@ -211,7 +424,6 @@ async def update_settings(settings: SettingsUpdate):
     
     try:
         if current_tts_instance is None:
-            # If no instance exists, create a default one
             current_tts_instance = SileroTTS(
                 model_id="v4_ru",
                 language="ru",
@@ -220,7 +432,6 @@ async def update_settings(settings: SettingsUpdate):
                 device="cpu"
             )
         
-        # Update the instance with provided settings
         if settings.model_id is not None:
             current_tts_instance.change_model(settings.model_id)
         if settings.language is not None:
@@ -237,8 +448,6 @@ async def update_settings(settings: SettingsUpdate):
             current_tts_instance.put_yo = settings.put_yo
         if settings.num_threads is not None:
             current_tts_instance.num_threads = settings.num_threads
-            
-            # If number of threads changed, update torch
             import torch
             torch.set_num_threads(settings.num_threads)
         
@@ -259,12 +468,19 @@ async def update_settings(settings: SettingsUpdate):
         raise HTTPException(status_code=500, detail=f"Error updating settings: {str(e)}")
 
 
-@app.get("/")
-async def root():
-    """Root endpoint to check if server is running"""
-    return {"message": "SileroTTS API Server is running!", "version": "1.0.0"}
+@app.delete("/cache")
+async def clear_cache():
+    """Clear temporary audio cache."""
+    try:
+        count = 0
+        for file in AUDIO_DIR.glob("tts_*.wav"):
+            file.unlink()
+            count += 1
+        return {"status": "Cache cleared", "files_deleted": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="localhost", port=8002, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=8002, log_level="info")

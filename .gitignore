@@ -25,3 +25,5 @@ build/
 dist/
 target/
 ```
+/silerotts.egg-info
+/.qodo

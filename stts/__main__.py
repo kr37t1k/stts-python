@@ -1,9 +1,47 @@
 import argparse
 import os
 import sys
+import asyncio
+import threading
+import webbrowser
 from loguru import logger
 from tqdm import tqdm
 from stts.silero_tts import SileroTTS
+
+
+def start_server(args):
+    """Start the FastAPI server."""
+    try:
+        import uvicorn
+        from .api_server import app
+    except ImportError as e:
+        logger.error(f"Failed to import server modules: {e}")
+        logger.info("Installing required packages: fastapi uvicorn")
+        os.system(f"{sys.executable} -m pip install fastapi uvicorn")
+        import uvicorn
+        from .api_server import app
+
+    logger.info(f"Starting SileroTTS API Server on {args.server_host}:{args.server_port}")
+    logger.info(f"API documentation: http://{args.server_host}:{args.server_port}/docs")
+    logger.info(f"Web UI: http://{args.server_host}:{args.server_port}/ui")
+
+    # Open browser if requested
+    if args.open_ui:
+        def open_browser():
+            import time
+            time.sleep(2)
+            webbrowser.open(f"http://localhost:{args.server_port}/ui")
+        browser_thread = threading.Thread(target=open_browser, daemon=True)
+        browser_thread.start()
+
+    # Run server
+    uvicorn.run(
+        app,
+        host=args.server_host,
+        port=args.server_port,
+        log_level=args.server_log_level.lower(),
+        reload=args.reload
+    )
 
 def main():
     parser = argparse.ArgumentParser(description='Silero TTS CLI')
@@ -26,6 +64,15 @@ def main():
     parser.add_argument('--no-put-yo', dest='put_yo', action='store_false', help='Do not put yo')
     parser.add_argument('--line-length-limit', type=int, default=1000, help='Max line length (default: 1000)')
     parser.add_argument('--num-threads', type=int, default=6, help='Number of torch threads (default: 6)')
+    
+    # Server options
+    parser.add_argument('--server', action='store_true', help='Start the API server')
+    parser.add_argument('--server-host', type=str, default='0.0.0.0', help='Server host (default: 0.0.0.0)')
+    parser.add_argument('--server-port', type=int, default=8002, help='Server port (default: 8002)')
+    parser.add_argument('--server-log-level', type=str, default='info', help='Server log level (default: info)')
+    parser.add_argument('--open-ui', action='store_true', help='Open web UI in browser (used with --server)')
+    parser.add_argument('--reload', action='store_true', help='Enable auto-reload for server (dev mode)')
+    
     args = parser.parse_args()
 
     # Set logging level
@@ -37,6 +84,11 @@ def main():
         # logger = None
     else:
         logger.add(sys.stderr, level=args.log_level.upper())
+
+    # Start API server if requested
+    if args.server:
+        start_server(args)
+        return
 
     try:
         models_file = os.path.join(os.path.dirname(__file__), 'latest_silero_models.yml')

@@ -1,0 +1,1272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SileroTTS - Text to Speech API</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary: #10b981;
+            --secondary-hover: #059669;
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: #475569;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --radius: 12px;
+            --radius-sm: 8px;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* Background pattern */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(16, 185, 129, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 2rem 0;
+        }
+
+        .logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--primary-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            margin-top: 0.5rem;
+        }
+
+        .version-badge {
+            display: inline-block;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            margin-top: 1rem;
+        }
+
+        /* Main Grid */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 900px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .card-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 1rem;
+            padding-right: 2.5rem;
+        }
+
+        /* Range Slider */
+        .range-container {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            padding: 0;
+            height: 6px;
+            background: var(--bg-tertiary);
+            border-radius: 3px;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: var(--primary);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .range-value {
+            min-width: 60px;
+            text-align: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            color: var(--primary-light);
+        }
+
+        /* Endpoint Tabs */
+        .endpoint-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .endpoint-tab {
+            padding: 0.5rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .endpoint-tab:hover {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .endpoint-tab.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.875rem 1.5rem;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+            color: white;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-primary);
+            border-color: var(--primary);
+        }
+
+        .btn-icon {
+            padding: 0.5rem;
+            min-width: auto;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid transparent;
+            border-top-color: currentColor;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Audio Player */
+        .audio-player {
+            background: var(--bg-tertiary);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .audio-player.visible {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .audio-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .audio-waveform {
+            height: 60px;
+            background: var(--bg-secondary);
+            border-radius: var(--radius-sm);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .waveform-bars {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            height: 100%;
+            padding: 0.5rem;
+        }
+
+        .waveform-bar {
+            width: 3px;
+            background: var(--primary);
+            border-radius: 2px;
+            animation: waveform 1s ease-in-out infinite;
+        }
+
+        @keyframes waveform {
+            0%, 100% { height: 20%; }
+            50% { height: 100%; }
+        }
+
+        .waveform-bar:nth-child(2) { animation-delay: 0.1s; }
+        .waveform-bar:nth-child(3) { animation-delay: 0.2s; }
+        .waveform-bar:nth-child(4) { animation-delay: 0.3s; }
+        .waveform-bar:nth-child(5) { animation-delay: 0.4s; }
+        .waveform-bar:nth-child(6) { animation-delay: 0.5s; }
+        .waveform-bar:nth-child(7) { animation-delay: 0.6s; }
+        .waveform-bar:nth-child(8) { animation-delay: 0.7s; }
+
+        audio {
+            width: 100%;
+            height: 40px;
+            border-radius: var(--radius-sm);
+        }
+
+        audio::-webkit-media-controls-panel {
+            background: var(--bg-secondary);
+        }
+
+        .audio-actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        /* Status Messages */
+        .status {
+            padding: 1rem;
+            border-radius: var(--radius-sm);
+            margin-top: 1rem;
+            display: none;
+        }
+
+        .status.visible {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .status-success {
+            background: rgba(16, 185, 129, 0.15);
+            border: 1px solid var(--secondary);
+            color: var(--secondary);
+        }
+
+        .status-error {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid var(--error);
+            color: var(--error);
+        }
+
+        .status-loading {
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid var(--primary);
+            color: var(--primary-light);
+        }
+
+        /* Settings Panel */
+        .settings-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        @media (max-width: 600px) {
+            .settings-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .toggle-group {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+        }
+
+        .toggle-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .toggle {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            background: var(--bg-primary);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .toggle.active {
+            background: var(--primary);
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+        }
+
+        .toggle.active::after {
+            transform: translateX(20px);
+        }
+
+        /* Models List */
+        .models-list {
+            max-height: 200px;
+            overflow-y: auto;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            padding: 0.5rem;
+        }
+
+        .model-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: background 0.2s;
+            font-size: 0.875rem;
+        }
+
+        .model-item:hover {
+            background: var(--bg-primary);
+        }
+
+        .model-item.active {
+            background: var(--primary);
+            color: white;
+        }
+
+        .model-badge {
+            font-size: 0.75rem;
+            padding: 0.125rem 0.5rem;
+            background: var(--bg-primary);
+            border-radius: 10px;
+            color: var(--text-muted);
+        }
+
+        .model-item.active .model-badge {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        /* Code Examples */
+        .code-block {
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            margin-top: 1rem;
+        }
+
+        .code-keyword { color: #c792ea; }
+        .code-string { color: #c3e88d; }
+        .code-property { color: #82aaff; }
+        .code-comment { color: #546e7a; }
+
+        /* Quick Actions */
+        .quick-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+
+        .quick-btn {
+            padding: 0.375rem 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quick-btn:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            margin-top: 3rem;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        footer a {
+            color: var(--primary-light);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--border);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">🎙️</div>
+                <h1>SileroTTS</h1>
+            </div>
+            <p class="subtitle">High-Quality Text-to-Speech API</p>
+            <span class="version-badge">Version 0.7</span>
+        </header>
+
+        <div class="main-grid">
+            <!-- Input Panel -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">📝</div>
+                    <h2 class="card-title">Generate Speech</h2>
+                </div>
+
+                <!-- Endpoint Selection -->
+                <div class="endpoint-tabs">
+                    <button class="endpoint-tab active" data-endpoint="audio">File Response</button>
+                    <button class="endpoint-tab" data-endpoint="stream">Streaming</button>
+                    <button class="endpoint-tab" data-endpoint="json">JSON (Base64)</button>
+                </div>
+
+                <div class="form-group">
+                    <label for="text">Text to Convert</label>
+                    <textarea id="text" placeholder="Enter text to convert to speech...">Hello! This is a test of the Silero TTS system.</textarea>
+                </div>
+
+                <div class="quick-actions">
+                    <button class="quick-btn" data-sample="Hello! This is a test of the Silero TTS system.">English</button>
+                    <button class="quick-btn" data-sample="Привет! Это тест системы синтеза речи Silero.">Russian</button>
+                    <button class="quick-btn" data-sample="Hallo! Dies ist ein Test des Silero TTS-Systems.">German</button>
+                    <button class="quick-btn" data-sample="¡Hola! Esta es una prueba del sistema Silero TTS.">Spanish</button>
+                </div>
+
+                <div class="settings-grid" style="margin-top: 1.5rem;">
+                    <div class="form-group">
+                        <label for="language">Language</label>
+                        <select id="language">
+                            <option value="ru" selected>Russian (Русский)</option>
+                            <option value="en">English</option>
+                            <option value="de">German (Deutsch)</option>
+                            <option value="es">Spanish (Español)</option>
+                            <option value="fr">French (Français)</option>
+                            <option value="uk">Ukrainian (Українська)</option>
+                            <option value="uz">Uzbek (O'zbek)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="model">Model</label>
+                        <select id="model">
+                            <option value="">Loading...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="speaker">Speaker</label>
+                        <select id="speaker">
+                            <option value="">Loading...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="device">Device</label>
+                        <select id="device">
+                            <option value="cpu" selected>CPU</option>
+                            <option value="cuda">CUDA (GPU)</option>
+                            <option value="auto">Auto</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Sample Rate: <span class="range-value" id="sampleRateValue">48000</span> Hz</label>
+                    <div class="range-container">
+                        <input type="range" id="sampleRate" min="8000" max="48000" step="1000" value="48000">
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" id="generateBtn">
+                    <span id="btnIcon">🔊</span>
+                    <span id="btnText">Generate Speech</span>
+                </button>
+
+                <div class="status" id="status"></div>
+
+                <!-- Audio Player -->
+                <div class="audio-player" id="audioPlayer">
+                    <div class="audio-info">
+                        <span id="audioDuration">Duration: 0s</span>
+                        <span id="audioFormat">Format: WAV</span>
+                    </div>
+                    <div class="audio-waveform">
+                        <div class="waveform-bars">
+                            <div class="waveform-bar"></div>
+                            <div class="waveform-bar"></div>
+                            <div class="waveform-bar"></div>
+                            <div class="waveform-bar"></div>
+                            <div class="waveform-bar"></div>
+                            <div class="waveform-bar"></div>
+                            <div class="waveform-bar"></div>
+                            <div class="waveform-bar"></div>
+                        </div>
+                    </div>
+                    <audio id="audioElement" controls></audio>
+                    <div class="audio-actions">
+                        <button class="btn btn-secondary" id="downloadBtn" style="flex:1">
+                            ⬇️ Download
+                        </button>
+                        <button class="btn btn-secondary btn-icon" id="copyUrlBtn" title="Copy URL">
+                            🔗
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings & Info Panel -->
+            <div>
+                <!-- Current Settings -->
+                <div class="card" style="margin-bottom: 2rem;">
+                    <div class="card-header">
+                        <div class="card-icon">⚙️</div>
+                        <h2 class="card-title">Settings</h2>
+                    </div>
+
+                    <div class="toggle-group">
+                        <span class="toggle-label">Put Accents</span>
+                        <div class="toggle active" id="putAccent" data-value="true"></div>
+                    </div>
+                    <div class="toggle-group">
+                        <span class="toggle-label">Put "Yo"</span>
+                        <div class="toggle active" id="putYo" data-value="true"></div>
+                    </div>
+                    <div class="toggle-group">
+                        <span class="toggle-label">Auto-play</span>
+                        <div class="toggle active" id="autoPlay" data-value="true"></div>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 1rem;">
+                        <label for="numThreads">Threads: <span id="threadsValue">6</span></label>
+                        <div class="range-container">
+                            <input type="range" id="numThreads" min="1" max="16" value="6">
+                        </div>
+                    </div>
+
+                    <button class="btn btn-secondary" id="applySettingsBtn" style="width: 100%; margin-top: 1rem;">
+                        Apply Settings
+                    </button>
+                </div>
+
+                <!-- API Info -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon">📡</div>
+                        <h2 class="card-title">API Reference</h2>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Base URL</label>
+                        <input type="text" id="baseUrl" value="http://localhost:8002" readonly>
+                    </div>
+
+                    <div class="code-block">
+                        <div id="curlExample">
+<span class="code-comment"># Generate audio file</span>
+<span class="code-keyword">curl</span> -X POST <span class="code-string">"http://localhost:8002/tts/audio"</span> \
+  -H <span class="code-string">"Content-Type: application/json"</span> \
+  -d <span class="code-string">'{
+    "text": "Hello World",
+    "language": "en"
+  }'</span> -o <span class="code-property">audio.wav</span>
+                        </div>
+                    </div>
+
+                    <div class="code-block">
+                        <div id="jsExample">
+<span class="code-comment">// JavaScript/Fetch</span>
+<span class="code-keyword">const</span> response = <span class="code-keyword">await</span> fetch(<span class="code-string">'http://localhost:8002/tts/audio'</span>, {
+  method: <span class="code-string">'POST'</span>,
+  headers: { <span class="code-property">'Content-Type'</span>: <span class="code-string">'application/json'</span> },
+  body: JSON.stringify({
+    text: <span class="code-string">'Hello World'</span>,
+    language: <span class="code-string">'en'</span>
+  })
+});
+<span class="code-keyword">const</span> blob = <span class="code-keyword">await</span> response.blob();
+                        </div>
+                    </div>
+
+                    <div class="quick-actions">
+                        <button class="quick-btn" id="refreshModelsBtn">🔄 Refresh Models</button>
+                        <button class="quick-btn" id="clearCacheBtn">🗑️ Clear Cache</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>SileroTTS API Server • <a href="/docs" target="_blank">OpenAPI Docs</a> • <a href="/models">Available Models</a></p>
+        </footer>
+    </div>
+
+    <script>
+        // State
+        const state = {
+            endpoint: 'audio',
+            models: {},
+            languages: [],
+            speakers: [],
+            currentAudioUrl: null,
+            isGenerating: false
+        };
+
+        // DOM Elements
+        const elements = {
+            text: document.getElementById('text'),
+            language: document.getElementById('language'),
+            model: document.getElementById('model'),
+            speaker: document.getElementById('speaker'),
+            device: document.getElementById('device'),
+            sampleRate: document.getElementById('sampleRate'),
+            sampleRateValue: document.getElementById('sampleRateValue'),
+            generateBtn: document.getElementById('generateBtn'),
+            status: document.getElementById('status'),
+            audioPlayer: document.getElementById('audioPlayer'),
+            audioElement: document.getElementById('audioElement'),
+            audioDuration: document.getElementById('audioDuration'),
+            downloadBtn: document.getElementById('downloadBtn'),
+            copyUrlBtn: document.getElementById('copyUrlBtn'),
+            baseUrl: document.getElementById('baseUrl'),
+            putAccent: document.getElementById('putAccent'),
+            putYo: document.getElementById('putYo'),
+            autoPlay: document.getElementById('autoPlay'),
+            numThreads: document.getElementById('numThreads'),
+            threadsValue: document.getElementById('threadsValue'),
+            applySettingsBtn: document.getElementById('applySettingsBtn'),
+            refreshModelsBtn: document.getElementById('refreshModelsBtn'),
+            clearCacheBtn: document.getElementById('clearCacheBtn')
+        };
+
+        // Initialize
+        async function init() {
+            await loadModels();
+            setupEventListeners();
+            updateCurlExample();
+            updateJsExample();
+        }
+
+        // Load available models
+        async function loadModels() {
+            try {
+                const response = await fetch(`${elements.baseUrl.value}/models`);
+                const data = await response.json();
+                
+                state.languages = data.available_languages || [];
+                state.models = data.available_models || {};
+                
+                updateLanguageSelect();
+            } catch (error) {
+                showStatus('Failed to load models: ' + error.message, 'error');
+            }
+        }
+
+        // Update language select
+        function updateLanguageSelect() {
+            const currentLang = elements.language.value;
+            elements.language.innerHTML = state.languages.map(lang => 
+                `<option value="${lang}" ${lang === currentLang ? 'selected' : ''}>${getLanguageName(lang)}</option>`
+            ).join('');
+            updateModelSelect();
+        }
+
+        // Update model select based on language
+        function updateModelSelect() {
+            const lang = elements.language.value;
+            const models = state.models[lang] || [];
+            
+            elements.model.innerHTML = models.map(model => 
+                `<option value="${model}">${model}</option>`
+            ).join('');
+            
+            // Load speakers for selected model
+            loadSpeakers();
+        }
+
+        // Load speakers
+        async function loadSpeakers() {
+            const lang = elements.language.value;
+            const modelId = elements.model.value;
+            
+            if (!modelId) {
+                elements.speaker.innerHTML = '<option value="">Select model first</option>';
+                return;
+            }
+
+            // Default speakers based on language
+            const defaultSpeakers = {
+                'ru': ['aidar', 'baya', 'kseniya', 'xenia', 'eugene', 'random', 'kseniya_v2'],
+                'en': ['en_0', 'en_1', 'en_2', 'en_3', 'en_4', 'random'],
+                'de': ['thorsten', 'thorsten_v2', 'random'],
+                'es': ['tux', 'tux_v2', 'random'],
+                'fr': ['gilles', 'gilles_v2', 'random']
+            };
+
+            state.speakers = defaultSpeakers[lang] || ['random'];
+            elements.speaker.innerHTML = state.speakers.map(speaker => 
+                `<option value="${speaker}">${speaker}</option>`
+            ).join('');
+        }
+
+        // Get language display name
+        function getLanguageName(code) {
+            const names = {
+                'ru': 'Russian (Русский)',
+                'en': 'English',
+                'de': 'German (Deutsch)',
+                'es': 'Spanish (Español)',
+                'fr': 'French (Français)',
+                'uk': 'Ukrainian (Українська)',
+                'uz': 'Uzbek (O\'zbek)'
+            };
+            return names[code] || code;
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Endpoint tabs
+            document.querySelectorAll('.endpoint-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.endpoint-tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    state.endpoint = tab.dataset.endpoint;
+                    updateCurlExample();
+                    updateJsExample();
+                });
+            });
+
+            // Language change
+            elements.language.addEventListener('change', () => {
+                updateModelSelect();
+                updateCurlExample();
+                updateJsExample();
+            });
+
+            // Model change
+            elements.model.addEventListener('change', () => {
+                loadSpeakers();
+                updateCurlExample();
+                updateJsExample();
+            });
+
+            // Sample rate
+            elements.sampleRate.addEventListener('input', () => {
+                elements.sampleRateValue.textContent = elements.sampleRate.value;
+            });
+
+            // Quick sample buttons
+            document.querySelectorAll('.quick-btn[data-sample]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    elements.text.value = btn.dataset.sample;
+                });
+            });
+
+            // Generate button
+            elements.generateBtn.addEventListener('click', generateSpeech);
+
+            // Download button
+            elements.downloadBtn.addEventListener('click', () => {
+                if (state.currentAudioUrl) {
+                    const a = document.createElement('a');
+                    a.href = state.currentAudioUrl;
+                    a.download = `tts_${elements.language.value}_${Date.now()}.wav`;
+                    a.click();
+                }
+            });
+
+            // Copy URL button
+            elements.copyUrlBtn.addEventListener('click', () => {
+                if (state.currentAudioUrl) {
+                    navigator.clipboard.writeText(state.currentAudioUrl);
+                    showStatus('URL copied to clipboard!', 'success');
+                }
+            });
+
+            // Toggles
+            document.querySelectorAll('.toggle').forEach(toggle => {
+                toggle.addEventListener('click', () => {
+                    toggle.classList.toggle('active');
+                    toggle.dataset.value = toggle.classList.contains('active');
+                });
+            });
+
+            // Threads
+            elements.numThreads.addEventListener('input', () => {
+                elements.threadsValue.textContent = elements.numThreads.value;
+            });
+
+            // Apply settings
+            elements.applySettingsBtn.addEventListener('click', applySettings);
+
+            // Refresh models
+            elements.refreshModelsBtn.addEventListener('click', loadModels);
+
+            // Clear cache
+            elements.clearCacheBtn.addEventListener('click', clearCache);
+
+            // Base URL change
+            elements.baseUrl.addEventListener('change', () => {
+                updateCurlExample();
+                updateJsExample();
+            });
+        }
+
+        // Generate speech
+        async function generateSpeech() {
+            if (state.isGenerating) return;
+            
+            const text = elements.text.value.trim();
+            if (!text) {
+                showStatus('Please enter some text to convert', 'error');
+                return;
+            }
+
+            state.isGenerating = true;
+            updateButtonState(true);
+            hideAudioPlayer();
+
+            const requestData = {
+                text: text,
+                language: elements.language.value,
+                model_id: elements.model.value || undefined,
+                speaker: elements.speaker.value || undefined,
+                sample_rate: parseInt(elements.sampleRate.value),
+                device: elements.device.value
+            };
+
+            try {
+                let endpoint = '/tts';
+                if (state.endpoint === 'audio') endpoint = '/tts/audio';
+                else if (state.endpoint === 'stream') endpoint = '/tts/stream';
+
+                showStatus('Generating speech...', 'loading');
+
+                const response = await fetch(`${elements.baseUrl.value}${endpoint}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestData)
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Generation failed');
+                }
+
+                if (state.endpoint === 'json') {
+                    // Handle JSON response (base64)
+                    const data = await response.json();
+                    const audioBytes = base64ToBlob(data.audio_data, 'audio/wav');
+                    const audioUrl = URL.createObjectURL(audioBytes);
+                    showAudioPlayer(audioUrl, data.duration, data.sample_rate);
+                } else {
+                    // Handle file/stream response
+                    const blob = await response.blob();
+                    const audioUrl = URL.createObjectURL(blob);
+                    showAudioPlayer(audioUrl);
+                }
+
+                showStatus('Speech generated successfully!', 'success');
+
+            } catch (error) {
+                showStatus('Error: ' + error.message, 'error');
+            } finally {
+                state.isGenerating = false;
+                updateButtonState(false);
+            }
+        }
+
+        // Update button state
+        function updateButtonState(loading) {
+            elements.generateBtn.disabled = loading;
+            document.getElementById('btnIcon').textContent = loading ? '' : '🔊';
+            document.getElementById('btnText').textContent = loading ? 'Generating...' : 'Generate Speech';
+            
+            if (loading) {
+                const spinner = document.createElement('div');
+                spinner.className = 'spinner';
+                spinner.id = 'btnSpinner';
+                document.getElementById('btnIcon').appendChild(spinner);
+            } else {
+                const spinner = document.getElementById('btnSpinner');
+                if (spinner) spinner.remove();
+            }
+        }
+
+        // Show audio player
+        function showAudioPlayer(url, duration = null, sampleRate = null) {
+            state.currentAudioUrl = url;
+            elements.audioElement.src = url;
+            
+            if (duration) {
+                elements.audioDuration.textContent = `Duration: ${duration.toFixed(2)}s`;
+            }
+            if (sampleRate) {
+                elements.audioFormat.textContent = `Sample Rate: ${sampleRate} Hz`;
+            }
+
+            elements.audioPlayer.classList.add('visible');
+
+            // Auto-play if enabled
+            if (elements.autoPlay.classList.contains('active')) {
+                elements.audioElement.play();
+            }
+        }
+
+        // Hide audio player
+        function hideAudioPlayer() {
+            elements.audioPlayer.classList.remove('visible');
+            if (state.currentAudioUrl) {
+                URL.revokeObjectURL(state.currentAudioUrl);
+                state.currentAudioUrl = null;
+            }
+        }
+
+        // Show status message
+        function showStatus(message, type) {
+            elements.status.textContent = message;
+            elements.status.className = `status visible status-${type}`;
+            
+            if (type !== 'loading') {
+                setTimeout(() => {
+                    elements.status.classList.remove('visible');
+                }, 5000);
+            }
+        }
+
+        // Apply settings
+        async function applySettings() {
+            try {
+                const response = await fetch(`${elements.baseUrl.value}/settings`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        put_accent: elements.putAccent.classList.contains('active'),
+                        put_yo: elements.putYo.classList.contains('active'),
+                        num_threads: parseInt(elements.numThreads.value)
+                    })
+                });
+
+                const data = await response.json();
+                showStatus('Settings applied successfully!', 'success');
+            } catch (error) {
+                showStatus('Error applying settings: ' + error.message, 'error');
+            }
+        }
+
+        // Clear cache
+        async function clearCache() {
+            try {
+                const response = await fetch(`${elements.baseUrl.value}/cache`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                showStatus(`Cache cleared: ${data.files_deleted} files deleted`, 'success');
+            } catch (error) {
+                showStatus('Error clearing cache: ' + error.message, 'error');
+            }
+        }
+
+        // Base64 to Blob
+        function base64ToBlob(base64, mimeType) {
+            const byteCharacters = atob(base64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            return new Blob([byteArray], { type: mimeType });
+        }
+
+        // Update curl example
+        function updateCurlExample() {
+            const lang = elements.language.value;
+            const model = elements.model.value;
+            const endpoint = state.endpoint === 'json' ? '/tts' : `/tts/${state.endpoint}`;
+            
+            document.getElementById('curlExample').innerHTML = 
+`<span class="code-comment"># Generate audio (${state.endpoint})</span>
+<span class="code-keyword">curl</span> -X POST <span class="code-string">"${elements.baseUrl.value}${endpoint}"</span> \\
+  -H <span class="code-string">"Content-Type: application/json"</span> \\
+  -d <span class="code-string">'{
+    "text": "Hello World",
+    "language": "${lang}"${model ? `,
+    "model_id": "${model}"` : ''}
+  }'</span>${state.endpoint !== 'json' ? ' -o audio.wav' : ''}`;
+        }
+
+        // Update JS example
+        function updateJsExample() {
+            const lang = elements.language.value;
+            const model = elements.model.value;
+            const endpoint = state.endpoint === 'json' ? '/tts' : `/tts/${state.endpoint}`;
+            
+            document.getElementById('jsExample').innerHTML = 
+`<span class="code-comment">// JavaScript - ${state.endpoint} endpoint</span>
+<span class="code-keyword">const</span> response = <span class="code-keyword">await</span> fetch(<span class="code-string">'${elements.baseUrl.value}${endpoint}'</span>, {
+  method: <span class="code-string">'POST'</span>,
+  headers: { <span class="code-property">'Content-Type'</span>: <span class="code-string">'application/json'</span> },
+  body: JSON.stringify({
+    text: <span class="code-string">'Hello World'</span>,
+    language: <span class="code-string">'${lang}'</span>${model ? `,
+    model_id: <span class="code-string">'${model}'</span>` : ''}
+  })
+});
+${state.endpoint === 'json' ? 
+`<span class="code-keyword">const</span> data = <span class="code-keyword">await</span> response.json();
+<span class="code-comment">// data.audio_data contains base64 audio</span>` : 
+`<span class="code-keyword">const</span> blob = <span class="code-keyword">await</span> response.blob();
+<span class="code-keyword">const</span> url = URL.createObjectURL(blob);`}`;
+        }
+
+        // AI helped me to write this perfect thing...
+        init();
+    </script>
+</body>
+</html>
