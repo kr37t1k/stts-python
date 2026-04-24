@@ -2,10 +2,10 @@ from setuptools import setup, find_packages
 
 setup(
     name="silerotts",
-    version="0.7",
+    version="0.8",
     description="Python package for using Silero TTS",
-    author="kr37t1k",
-    author_email="egorakentiev28@gmail.com",
+    author="daswer123",
+    author_email="",
     packages=find_packages(),
     include_dirs=["stts", "tests"],
     install_requires=[
@@ -13,7 +13,7 @@ setup(
         "pyyaml>=6.0.1",
         "torchaudio",
         "pytest",
-        "numpy",
+        "numpy<2",
     ],
     python_requires=">=3.7",
 )

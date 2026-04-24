@@ -690,6 +690,9 @@
                             <option value="fr">French (Français)</option>
                             <option value="uk">Ukrainian (Українська)</option>
                             <option value="uz">Uzbek (O'zbek)</option>
+                            <option value="tt">Tatar (Татар)</option>
+                            <option value="ba">Bashkir (Башҡорт)</option>
+                            <option value="xal">Kalmyk (Хальмг)</option>
                         </select>
                     </div>
 
@@ -847,13 +850,14 @@
         </footer>
     </div>
 
-    <script>
+        <script>
         // State
         const state = {
             endpoint: 'audio',
             models: {},
             languages: [],
             speakers: [],
+            sampleRates: [],
             currentAudioUrl: null,
             isGenerating: false
         };
@@ -893,16 +897,25 @@
             updateJsExample();
         }
 
-        // Load available models
+        // Load available models from API
         async function loadModels() {
             try {
                 const response = await fetch(`${elements.baseUrl.value}/models`);
                 const data = await response.json();
                 
-                state.languages = data.available_languages || [];
                 state.models = data.available_models || {};
+                state.languages = data.available_languages || [];
+                
+                // Store full model info for sample rates
+                state.modelInfo = data.model_info || {};
                 
                 updateLanguageSelect();
+                
+                // Select first language by default if none selected
+                if (state.languages.length > 0 && !elements.language.value) {
+                    elements.language.value = state.languages[0];
+                    updateModelSelect();
+                }
             } catch (error) {
                 showStatus('Failed to load models: ' + error.message, 'error');
             }
@@ -922,17 +935,25 @@
             const lang = elements.language.value;
             const models = state.models[lang] || [];
             
+            if (models.length === 0) {
+                elements.model.innerHTML = '<option value="">No models available</option>';
+                elements.speaker.innerHTML = '<option value="">Select model first</option>';
+                elements.sampleRate.disabled = true;
+                return;
+            }
+
+            elements.sampleRate.disabled = false;
             elements.model.innerHTML = models.map(model => 
                 `<option value="${model}">${model}</option>`
             ).join('');
             
             // Load speakers for selected model
             loadSpeakers();
+            updateSampleRates();
         }
 
-        // Load speakers
-        async function loadSpeakers() {
-            const lang = elements.language.value;
+        // Load speakers based on model name
+        function loadSpeakers() {
             const modelId = elements.model.value;
             
             if (!modelId) {
@@ -940,19 +961,90 @@
                 return;
             }
 
-            // Default speakers based on language
+            // Extract speaker name from model ID
+            // Models like: aidar_v2, kseniya_v2, v4_ru, thorsten_v2, tux_v2, etc.
+            const speakerPatterns = [
+                /^(aidar|baya|kseniya|irina|ruslan|natasha)_v?\d*$/,  // Russian speakers
+                /^(thorsten)_v?\d*$/,  // German speaker
+                /^(tux)_v?\d*$/,  // Spanish speaker
+                /^(gilles)_v?\d*$/,  // French speaker
+                /^(lj)_v?\d*$/,  // English speaker (LibriVox)
+                /^(mykyta|dilnavoz)_v?\d*$/,  // Ukrainian/Uzbek speakers
+                /^(en)_\d+$/,  // English generic speakers
+            ];
+            
+            let speaker = 'random';
+            
+            // Check if model name matches a speaker pattern
+            for (const pattern of speakerPatterns) {
+                const match = modelId.match(pattern);
+                if (match) {
+                    speaker = match[1];
+                    break;
+                }
+            }
+            
+            // For generic models (v4_ru, v3_en, etc.), use 'random'
+            // For speaker-specific models, extract the speaker name
+            
+            // Build speaker list based on language and model
+            const lang = elements.language.value;
             const defaultSpeakers = {
-                'ru': ['aidar', 'baya', 'kseniya', 'xenia', 'eugene', 'random', 'kseniya_v2'],
-                'en': ['en_0', 'en_1', 'en_2', 'en_3', 'en_4', 'random'],
-                'de': ['thorsten', 'thorsten_v2', 'random'],
-                'es': ['tux', 'tux_v2', 'random'],
-                'fr': ['gilles', 'gilles_v2', 'random']
+                'ru': ['aidar', 'baya', 'kseniya', 'irina', 'ruslan', 'natasha', 'xenia', 'eugene', 'random'],
+                'en': ['lj', 'en_0', 'en_1', 'en_2', 'random'],
+                'de': ['thorsten', 'random'],
+                'es': ['tux', 'random'],
+                'fr': ['gilles', 'random'],
+                'uk': ['mykyta', 'random'],
+                'uz': ['dilnavoz', 'random'],
+                'tt': ['dilyara', 'random'],
+                'ba': ['aigul', 'random'],
+                'xal': ['erdni', 'random'],
+                'default': ['random']
             };
-
-            state.speakers = defaultSpeakers[lang] || ['random'];
-            elements.speaker.innerHTML = state.speakers.map(speaker => 
-                `<option value="${speaker}">${speaker}</option>`
+            
+            state.speakers = defaultSpeakers[lang] || defaultSpeakers['default'];
+            
+            // If model has embedded speaker, prioritize it
+            if (speaker !== 'random' && !state.speakers.includes(speaker)) {
+                state.speakers.unshift(speaker);
+            }
+            
+            elements.speaker.innerHTML = state.speakers.map(s => 
+                `<option value="${s}" ${s === speaker ? 'selected' : ''}>${s}</option>`
             ).join('');
+        }
+
+        // Update sample rates based on selected model
+        function updateSampleRates() {
+            const modelId = elements.model.value;
+            const lang = elements.language.value;
+            
+            if (!modelId) {
+                elements.sampleRate.value = 48000;
+                elements.sampleRateValue.textContent = '48000';
+                return;
+            }
+            
+            // Default sample rates based on model naming conventions
+            let defaultRates = [8000, 16000, 24000, 48000];
+            
+            // Check model name for sample rate hints
+            if (modelId.includes('_8khz')) {
+                defaultRates = [8000];
+            } else if (modelId.includes('_16khz')) {
+                defaultRates = [8000, 16000];
+            } else if (modelId.includes('v5') || modelId.includes('v4') || modelId.includes('v3')) {
+                defaultRates = [8000, 24000, 48000];
+            }
+            
+            elements.sampleRate.min = Math.min(...defaultRates);
+            elements.sampleRate.max = Math.max(...defaultRates);
+            elements.sampleRate.step = Math.min(...defaultRates);
+            
+            // Set to highest quality by default
+            elements.sampleRate.value = Math.max(...defaultRates);
+            elements.sampleRateValue.textContent = elements.sampleRate.value;
         }
 
         // Get language display name
@@ -964,9 +1056,15 @@
                 'es': 'Spanish (Español)',
                 'fr': 'French (Français)',
                 'uk': 'Ukrainian (Українська)',
-                'uz': 'Uzbek (O\'zbek)'
+                'uz': 'Uzbek (O\'zbek)',
+                'tt': 'Tatar (Татар)',
+                'ba': 'Bashkir (Башҡорт)',
+                'xal': 'Kalmyk (Хальмг)',
+                'indic': 'Indic Languages',
+                'cyrillic': 'Cyrillic',
+                'multi': 'Multi-language'
             };
-            return names[code] || code;
+            return names[code] || code.toUpperCase();
         }
 
         // Setup event listeners
@@ -998,6 +1096,11 @@
 
             // Sample rate
             elements.sampleRate.addEventListener('input', () => {
+                elements.sampleRateValue.textContent = elements.sampleRate.value;
+            });
+
+            // Sample rate change - update display
+            elements.sampleRate.addEventListener('change', () => {
                 elements.sampleRateValue.textContent = elements.sampleRate.value;
             });
 
@@ -1109,7 +1212,13 @@
                     // Handle file/stream response
                     const blob = await response.blob();
                     const audioUrl = URL.createObjectURL(blob);
-                    showAudioPlayer(audioUrl);
+                    
+                    // Get duration from audio metadata
+                    const audio = new Audio();
+                    audio.onloadedmetadata = () => {
+                        showAudioPlayer(audioUrl, audio.duration, parseInt(elements.sampleRate.value));
+                    };
+                    audio.src = audioUrl;
                 }
 
                 showStatus('Speech generated successfully!', 'success');
@@ -1146,9 +1255,14 @@
             
             if (duration) {
                 elements.audioDuration.textContent = `Duration: ${duration.toFixed(2)}s`;
+            } else {
+                elements.audioDuration.textContent = 'Duration: --';
             }
+            
             if (sampleRate) {
                 elements.audioFormat.textContent = `Sample Rate: ${sampleRate} Hz`;
+            } else {
+                elements.audioFormat.textContent = `Sample Rate: ${elements.sampleRate.value} Hz`;
             }
 
             elements.audioPlayer.classList.add('visible');
