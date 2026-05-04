@@ -1,7 +1,8 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, StreamingResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 import tempfile
@@ -17,6 +18,9 @@ APP_DIR = Path(__file__).parent
 TEMPLATES_DIR = APP_DIR / "templates"
 STATIC_DIR = APP_DIR / "static"
 
+# Setup templates
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
 # Import SileroTTS with error handling
 try:
     from stts.silero_tts import SileroTTS
@@ -28,7 +32,7 @@ except ImportError as e:
 
 app = FastAPI(
     title="SileroTTS API Server",
-    version="0.7",
+    version="0.8.2",
     description="Text-to-Speech API with audio streaming support"
 )
 
@@ -41,12 +45,65 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# app.mount("/static", name="static")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
 # Global instance to hold the current TTS instance
 current_tts_instance = None
 
 # Temp directory for audio files
 AUDIO_DIR = Path(tempfile.gettempdir()) / "stts_audio"
 AUDIO_DIR.mkdir(exist_ok=True)
+
+# History metadata file
+HISTORY_FILE = AUDIO_DIR / "history.json"
+
+def load_history():
+    """Load generation history from JSON file."""
+    try:
+        if HISTORY_FILE.exists():
+            with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Error loading history: {e}")
+    return []
+
+def save_history(history):
+    """Save generation history to JSON file."""
+    try:
+        with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+            json.dump(history, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print(f"Error saving history: {e}")
+
+def add_to_history(text, language, model_id, speaker, sample_rate, duration, file_path):
+    """Add a new generation to history."""
+    history = load_history()
+    
+    entry = {
+        "id": str(uuid.uuid4()),
+        "timestamp": datetime.now().isoformat(),
+        "text": text,
+        "language": language,
+        "model_id": model_id,
+        "speaker": speaker,
+        "sample_rate": sample_rate,
+        "duration": duration,
+        "filename": Path(file_path).name,
+        "filepath": str(file_path)
+    }
+    
+    history.insert(0, entry)
+    
+    # Keep only last 100 entries
+    if len(history) > 100:
+        history = history[:100]
+    
+    save_history(history)
+    return entry
+
+from datetime import datetime
+import json
 
 
 class ModelInfo(BaseModel):
@@ -68,6 +125,7 @@ class TTSRequest(BaseModel):
     sample_rate: Optional[int] = None
     device: Optional[str] = "cpu"
     output_format: Optional[str] = "wav"
+    autoplay: Optional[bool] = False
 
 
 class TTSResponse(BaseModel):
@@ -169,30 +227,33 @@ def generate_audio_file(
 
 
 @app.get("/")
-async def root():
-    """Root endpoint to check if server is running."""
-    return {
-        "message": "SileroTTS API Server v2.0 is running!",
-        "ui": "/ui",
-        "docs": "/docs",
-        "endpoints": {
-            "POST /tts": "Generate TTS - returns base64 audio (JSON)",
-            "POST /tts/audio": "Generate TTS - returns audio file directly",
-            "POST /tts/stream": "Generate TTS - streams audio response",
-            "GET /tts/audio": "GET version for browser testing",
-            "GET /tts/stream": "GET version for browser testing",
-            "GET /models": "List available models",
-            "GET /settings": "Get current settings",
-            "POST /settings": "Update settings",
-            "DELETE /cache": "Clear temporary audio cache"
-        },
-        "version": "2.0.0"
-    }
+async def root(request: Request):
+    """Root endpoint - serves the web UI."""
+    return templates.TemplateResponse(
+        "main.html",
+        {"request": request}
+    )
+    
 
+@app.get("/ui")
+async def get_ui(request: Request):
+    """Serve the modern web UI."""
+    return templates.TemplateResponse(
+        "index.html",
+        {"request": request}
+    )
+    
+def default_speakers(lang: str):
+    if lang == 'ru':
+        model.speakers = ['aidar', 'baya', 'kseniya', 'xenia', 'eugene', 'random']
+    elif lang == 'en':
+        model.speakers = ['en_0', 'en_1', 'en_2', 'en_3', 'en_4', 'en_5', 'en_6', 'en_7', 'en_8', 'en_9', 'en_10', 'random']
+    else:
+        model.speakers = ['random'] 
 
 @app.get("/models")
-async def get_models():
-    """Get available models information."""
+async def get_models(request: Request, language: Optional[str] = None):
+    """Get available models information - returns JSON or HTML."""
     if not SILEROTTS_AVAILABLE:
         raise HTTPException(status_code=500, detail="SileroTTS library not available")
     
@@ -200,8 +261,55 @@ async def get_models():
         models = SileroTTS.get_available_models()
         languages = SileroTTS.get_available_languages()
         
+        # Get speakers for requested language or current instance
+        speakers = {}
+        sample_rates = {}
+        speakers_list = []
+        
+        if language:
+            # Create temporary instance to get speakers for requested language
+            model_id = models[language][0] if models.get(language) else None
+            if model_id:
+                temp_tts = SileroTTS(
+                    model_id=model_id,
+                    language=language,
+                    speaker=None,
+                    sample_rate=48000,
+                    device="cpu"
+                )
+                speaker_info = temp_tts.get_available_speakers()
+                speakers[language] = speaker_info.get('speakers', []) if isinstance(speaker_info, dict) else speaker_info
+                sample_rates[language] = SileroTTS.get_available_sample_rates_static(language, model_id)
+
+                # Build speakers list for HTML template
+                for spk in speakers[language]:
+                    speakers_list.append({
+                        'language': language,
+                        'model_id': model_id,
+                        'speaker': spk,
+                        'sample_rates': sample_rates[language]
+                    })
+        elif current_tts_instance:
+            print("elif cur")
+            # Use current instance
+            speaker_info = current_tts_instance.get_available_speakers()
+            speakers[current_tts_instance.language] = speaker_info.get('speakers', []) if isinstance(speaker_info, dict) else speaker_info
+            sample_rates[current_tts_instance.language] = {
+                current_tts_instance.model_id: speaker_info.get('sample_rates', []) if isinstance(speaker_info, dict) else []
+            }
+        
+            # Build speakers list for HTML template
+            for spk in speakers[current_tts_instance.language]:
+                speakers_list.append({
+                    'language': current_tts_instance.language,
+                    'model_id': current_tts_instance.model_id,
+                    'speaker': spk,
+                    'sample_rates': sample_rates[current_tts_instance.language].get(current_tts_instance.model_id, [])
+                })
+        
         current_model_info = {}
         if current_tts_instance:
+            print("if curr")
             current_model_info = {
                 "model_id": current_tts_instance.model_id,
                 "language": current_tts_instance.language,
@@ -210,13 +318,117 @@ async def get_models():
                 "device": current_tts_instance.device
             }
         
+        # Return HTML if browser accepts it
+        accept_header = request.headers.get("accept", "")
+        if "text/html" in accept_header:
+            return templates.TemplateResponse(
+                "models.html",
+                {
+                    "request": request,
+                    "available_models": models,
+                    "available_languages": languages,
+                    "available_speakers": speakers_list,
+                    "available_sample_rates": sample_rates
+                }
+            )
+        
         return {
             "available_models": models,
             "available_languages": languages,
-            "current_model": current_model_info
+            "available_speakers": speakers,
+            "available_sample_rates": sample_rates,
+            "current_model": current_model_info,
+            "speakers_list": speakers_list
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error getting models: {str(e)}")
+
+
+@app.get("/speakers")
+async def get_speakers(language: str = Query(None, description="Language code"), model_id: Optional[str] = Query(None, description="Model ID")):
+    """Get available speakers for a specific language/model."""
+    if not SILEROTTS_AVAILABLE:
+        raise HTTPException(status_code=500, detail="SileroTTS library not available")
+    
+    try:
+        models = SileroTTS.get_available_models()
+        
+        # Build comprehensive speakers list
+        speakers_list = []
+        
+        # If language and model_id specified, return detailed info
+        if language and model_id:
+            if language not in models:
+                raise HTTPException(status_code=400, detail=f"Language '{language}' not found")
+            
+            if model_id not in models[language]:
+                raise HTTPException(status_code=400, detail=f"Model '{model_id}' not found for language '{language}'")
+            
+            loop = asyncio.get_event_loop()
+            speaker_info = await loop.run_in_executor(None, lambda: _get_speakers_for_model(language, model_id))
+            
+            speakers_list.append({
+                'language': language,
+                'model_id': model_id,
+                'speaker': speaker_info,
+                'sample_rates': speaker_info.get('sample_rates', []) if isinstance(speaker_info, dict) else []
+            })
+            
+            return {
+                "language": language,
+                "model_id": model_id,
+                "speakers": speaker_info,
+                "speakers_list": speakers_list
+            }
+        
+        # Otherwise, return all speakers
+        for lang, models_list in models.items():
+            for m_id in models_list:
+                try:
+                    loop = asyncio.get_event_loop()
+                    speaker_info = await loop.run_in_executor(None, lambda: _get_speakers_for_model(lang, m_id))
+                    
+                    speakers = speaker_info.get('speakers', []) if isinstance(speaker_info, dict) else speaker_info
+                    sample_rates = speaker_info.get('sample_rates', []) if isinstance(speaker_info, dict) else []
+                    
+                    for speaker in speakers:
+                        speakers_list.append({
+                            'language': lang,
+                            'model_id': m_id,
+                            'speaker': speaker,
+                            'sample_rates': sample_rates
+                        })
+                except Exception as e:
+                    print(f"Error loading speakers for {lang}/{m_id}: {e}")
+                    continue
+        
+        # Return HTML if requested
+        return {
+            "speakers_list": speakers_list
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting speakers: {str(e)}")
+
+
+def _get_speakers_for_model(language: str, model_id: str):
+    """Helper function to get speakers for a model (runs in thread pool)."""
+    temp_tts = SileroTTS(
+        model_id=model_id,
+        language=language,
+        speaker=None,
+        sample_rate=48000,
+        device="cpu"
+    )
+    
+    speakers_list = temp_tts.get_available_speakers()
+    sample_rates = temp_tts.get_available_sample_rates()
+    
+    return {
+        "speakers": speakers_list,
+        "sample_rates": sample_rates
+    }
 
 
 @app.post("/tts")
@@ -237,10 +449,12 @@ async def generate_tts_json(request: TTSRequest):
             device=request.device or "cpu"
         )
         
+        # Run TTS generation in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
         file_id = str(uuid.uuid4())
         output_path = AUDIO_DIR / f"tts_{file_id}.wav"
         
-        result_file = tts.tts(request.text, str(output_path))
+        result_file = await loop.run_in_executor(None, lambda: tts.tts(request.text, str(output_path)))
         
         with open(result_file, 'rb') as audio_file:
             audio_data = base64.b64encode(audio_file.read()).decode('utf-8')
@@ -280,10 +494,27 @@ async def generate_tts_audio(request: TTSRequest):
             device=request.device or "cpu"
         )
         
+        # Run TTS generation in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
         file_id = str(uuid.uuid4())
         output_path = AUDIO_DIR / f"tts_{file_id}.wav"
         
-        result_file = tts.tts(request.text, str(output_path))
+        result_file = await loop.run_in_executor(None, lambda: tts.tts(request.text, str(output_path), autoplay=request.autoplay))
+        
+        # Calculate duration
+        file_stats = os.stat(result_file)
+        duration = file_stats.st_size / (tts.sample_rate * 2)
+        
+        # Add to history
+        add_to_history(
+            text=request.text,
+            language=language,
+            model_id=model_id,
+            speaker=request.speaker,
+            sample_rate=tts.sample_rate,
+            duration=duration,
+            file_path=result_file
+        )
         
         # Generate filename for download
         filename = f"tts_{language}_{file_id[:8]}.wav"
@@ -319,16 +550,26 @@ async def generate_tts_stream(request: TTSRequest):
             device=request.device or "cpu"
         )
         
+        # Run TTS generation in thread pool to avoid blocking
+        loop = asyncio.get_event_loop()
         file_id = str(uuid.uuid4())
         output_path = AUDIO_DIR / f"tts_{file_id}.wav"
         
-        result_file = tts.tts(request.text, str(output_path))
+        result_file = await loop.run_in_executor(None, lambda: tts.tts(request.text, str(output_path), autoplay=request.autoplay))
         
         # Stream the file
-        def iter_file():
-            with open(result_file, 'rb') as f:
-                while chunk := f.read(8192):
-                    yield chunk
+        async def iter_file():
+            loop = asyncio.get_event_loop()
+            def read_chunks():
+                with open(result_file, 'rb') as f:
+                    while True:
+                        chunk = f.read(8192)
+                        if not chunk:
+                            break
+                        yield chunk
+            # Convert sync generator to async
+            for chunk in read_chunks():
+                yield chunk
         
         filename = f"tts_{language}_{file_id[:8]}.wav"
         
@@ -468,17 +709,67 @@ async def update_settings(settings: SettingsUpdate):
         raise HTTPException(status_code=500, detail=f"Error updating settings: {str(e)}")
 
 
+@app.get("/history")
+async def get_history(request: Request):
+    """Get generation history with audio file URLs."""
+    try:
+        history = load_history()
+        
+        # Build full URLs for audio files
+        base_url = f"{request.url.scheme}://{request.url.netloc}"
+        for entry in history:
+            entry['audio_url'] = f"{base_url}/audio/{entry['filename']}"
+        
+        return {"history": history, "total": len(history)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting history: {str(e)}")
+
+
+@app.get("/audio/{filename}")
+async def get_audio_file(filename: str):
+    """Serve audio file from cache."""
+    file_path = AUDIO_DIR / filename
+    if file_path.exists():
+        return FileResponse(
+            path=file_path,
+            media_type="audio/wav",
+            filename=filename
+        )
+    raise HTTPException(status_code=404, detail="Audio file not found")
+
+
 @app.delete("/cache")
 async def clear_cache():
-    """Clear temporary audio cache."""
+    """Clear temporary audio cache and history."""
     try:
         count = 0
         for file in AUDIO_DIR.glob("tts_*.wav"):
             file.unlink()
             count += 1
+        
+        # Clear history file
+        if HISTORY_FILE.exists():
+            HISTORY_FILE.unlink()
+        
         return {"status": "Cache cleared", "files_deleted": count}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error clearing cache: {str(e)}")
+
+
+@app.get("/cache")
+async def get_cache_info():
+    """Get information about cached audio files."""
+    try:
+        files = list(AUDIO_DIR.glob("tts_*.wav"))
+        total_size = sum(f.stat().st_size for f in files)
+        
+        return {
+            "files_count": len(files),
+            "total_size_bytes": total_size,
+            "total_size_mb": round(total_size / 1024 / 1024, 2)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting cache info: {str(e)}")
 
 
 if __name__ == "__main__":

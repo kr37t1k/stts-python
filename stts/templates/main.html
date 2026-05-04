@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SileroTTS API Server</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary: #10b981;
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: #475569;
+            --radius: 12px;
+            --radius-sm: 8px;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(16, 185, 129, 0.1) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: -1;
+            animation: bgPulse 15s ease-in-out infinite;
+        }
+
+        @keyframes bgPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            margin-bottom: 4rem;
+            padding: 2rem 0;
+            position: relative;
+        }
+
+        header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+            border-radius: 3px;
+        }
+
+        .logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .logo-icon {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+            animation: logoFloat 3s ease-in-out infinite;
+        }
+
+        @keyframes logoFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--primary-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: titleGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes titleGlow {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.2); }
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.25rem;
+            margin-top: 0.5rem;
+        }
+
+        .version-badge {
+            display: inline-block;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            padding: 0.375rem 1rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            margin-top: 1rem;
+            border: 1px solid var(--border);
+        }
+
+        /* Status Indicator */
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--secondary);
+            border-radius: 20px;
+            color: var(--secondary);
+            font-size: 0.875rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--secondary);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Endpoints List */
+        .endpoints-section {
+            margin-top: 3rem;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: var(--primary);
+            border-radius: 2px;
+        }
+
+        .endpoints-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .endpoint-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            animation: slideIn 0.5s ease backwards;
+        }
+
+        .endpoint-card:nth-child(1) { animation-delay: 0.1s; }
+        .endpoint-card:nth-child(2) { animation-delay: 0.2s; }
+        .endpoint-card:nth-child(3) { animation-delay: 0.3s; }
+        .endpoint-card:nth-child(4) { animation-delay: 0.4s; }
+        .endpoint-card:nth-child(5) { animation-delay: 0.5s; }
+        .endpoint-card:nth-child(6) { animation-delay: 0.6s; }
+        .endpoint-card:nth-child(7) { animation-delay: 0.7s; }
+        .endpoint-card:nth-child(8) { animation-delay: 0.8s; }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .endpoint-card:hover {
+            border-color: var(--primary);
+            transform: translateX(8px);
+            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.2);
+        }
+
+        .endpoint-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--primary);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .endpoint-card:hover::before {
+            opacity: 1;
+        }
+
+        .method {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.375rem 0.75rem;
+            border-radius: 6px;
+            min-width: 70px;
+            text-align: center;
+        }
+
+        .method.get {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+        }
+
+        .method.post {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+        }
+
+        .method.delete {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+        }
+
+        .endpoint-path {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            color: var(--text-primary);
+            flex: 1;
+        }
+
+        .endpoint-desc {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            max-width: 300px;
+        }
+
+        .endpoint-arrow {
+            color: var(--text-muted);
+            font-size: 1.25rem;
+            transition: transform 0.3s;
+        }
+
+        .endpoint-card:hover .endpoint-arrow {
+            transform: translateX(4px);
+            color: var(--primary);
+        }
+
+        /* Quick Links */
+        .quick-links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 3rem;
+        }
+
+        .quick-link {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem 1.5rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+
+        .quick-link:hover {
+            border-color: var(--primary);
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.2);
+        }
+
+        .quick-link-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .quick-link-text {
+            font-weight: 500;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            margin-top: 4rem;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        footer a {
+            color: var(--primary-light);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        footer a:hover {
+            color: var(--primary);
+        }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .container {
+                padding: 2rem 1rem;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .endpoint-card {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .endpoint-path {
+                font-size: 0.875rem;
+            }
+
+            .endpoint-desc {
+                max-width: none;
+            }
+
+            .quick-links {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">🎙️</div>
+                <h1>SileroTTS API</h1>
+            </div>
+            <p class="subtitle">High-Quality Text-to-Speech Server</p>
+            <span class="version-badge">Version 2.0</span>
+            
+            <div class="status-indicator">
+                <span class="status-dot"></span>
+                <span>Server is running</span>
+            </div>
+        </header>
+
+        <section class="endpoints-section">
+            <h2 class="section-title">Available Endpoints</h2>
+            
+            <div class="endpoints-list">
+                <div class="endpoint-card">
+                    <span class="method get">GET</span>
+                    <span class="endpoint-path">/</span>
+                    <span class="endpoint-desc">This page - API overview</span>
+                    <span class="endpoint-arrow">→</span>
+                </div>
+
+                <div class="endpoint-card">
+                    <span class="method get">GET</span>
+                    <span class="endpoint-path">/ui</span>
+                    <span class="endpoint-desc">Web UI interface</span>
+                    <span class="endpoint-arrow">→</span>
+                </div>
+
+                <div class="endpoint-card">
+                    <span class="method get">GET</span>
+                    <span class="endpoint-path">/models</span>
+                    <span class="endpoint-desc">List available models</span>
+                    <span class="endpoint-arrow">→</span>
+                </div>
+
+                <div class="endpoint-card">
+                    <span class="method get">GET</span>
+                    <span class="endpoint-path">/speakers_html</span>
+                    <span class="endpoint-desc">Browse all speakers</span>
+                    <span class="endpoint-arrow">→</span>
+                </div>
+
+                <div class="endpoint-card">
+                    <span class="method post">POST</span>
+                    <span class="endpoint-path">/tts/audio</span>
+                    <span class="endpoint-desc">Generate speech (direct audio)</span>
+                    <span class="endpoint-arrow">→</span>
+                </div>
+
+                <div class="endpoint-card">
+                    <span class="method post">POST</span>
+                    <span class="endpoint-path">/tts/stream</span>
+                    <span class="endpoint-desc">Generate speech (streaming)</span>
+                    <span class="endpoint-arrow">→</span>
+                </div>
+
+                <div class="endpoint-card">
+                    <span class="method post">POST</span>
+                    <span class="endpoint-path">/settings</span>
+                    <span class="endpoint-desc">Update TTS settings</span>
+                    <span class="endpoint-arrow">→</span>
+                </div>
+
+                <div class="endpoint-card">
+                    <span class="method delete">DELETE</span>
+                    <span class="endpoint-path">/cache</span>
+                    <span class="endpoint-desc">Clear temporary cache</span>
+                    <span class="endpoint-arrow">→</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="quick-links">
+            <a href="/docs" class="quick-link" target="_blank">
+                <div class="quick-link-icon">📚</div>
+                <span class="quick-link-text">OpenAPI Docs</span>
+            </a>
+            <a href="/ui" class="quick-link">
+                <div class="quick-link-icon">🎨</div>
+                <span class="quick-link-text">Web Interface</span>
+            </a>
+            <a href="/models" class="quick-link">
+                <div class="quick-link-icon">📦</div>
+                <span class="quick-link-text">Models</span>
+            </a>
+        </section>
+
+        <footer>
+            <p>SileroTTS API Server • Built with FastAPI & Python</p>
+        </footer>
+    </div>
+</body>
+</html>

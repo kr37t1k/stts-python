@@ -513,7 +513,7 @@ class SileroTTS:
 
         return preprocessed_lines, preprocessed_text_len
 
-    def tts(self, text, output_file, progress_callback=None):
+    def tts(self, text, output_file, progress_callback=None, autoplay=False):
         """
         Generate speech from text and save to output file with enhanced error handling and progress tracking.
         
@@ -620,8 +620,9 @@ class SileroTTS:
         wf.close()
         logger.success(f'Speech saved to {output_filename}')
         sf_file, sf_samplerate = sf.read(output_filename)
-        sd.play(data=sf_file, samplerate=self.sample_rate, blocking=True)
-        sd.wait()
+        if autoplay:
+            sd.play(data=sf_file, samplerate=self.sample_rate, blocking=True)
+            sd.wait()
         print(f"Wave export file playing: {output_filename}...")
         return output_filename
 
@@ -788,9 +789,9 @@ class SileroTTS:
 
 
 if __name__== '__main__':
-    tts = SileroTTS(model_id='v4_ru',
+    tts = SileroTTS(model_id='v5_ru',
                     language='ru',
-                    speaker='kseniya_v2',  # Updated to work with multi_v2 models
+                    speaker='baya',  # Updated to work with multi_v2 models
                     sample_rate=48000,
                     device='cpu')
 
