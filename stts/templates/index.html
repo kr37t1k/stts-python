@@ -1,118 +1,412 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SileroTTS - Text to Speech API</title>
+    <title>STTS uAPI</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/styles.css">
+    <style>
+        .cascading-select {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+        
+        .cascade-step {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 1.5rem;
+            border-radius: 12px;
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .cascade-step.disabled {
+            opacity: 0.4;
+            pointer-events: none;
+            filter: grayscale(0.5);
+        }
+        
+        .cascade-step.active {
+            transform: scale(1.02);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+        }
+        
+        .cascade-step.completed {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+        
+        .cascade-number {
+            font-size: 0.875rem;
+            opacity: 0.9;
+            margin-bottom: 0.5rem;
+        }
+        
+        .cascade-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+        
+        .cascade-select {
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 8px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .cascade-select:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .cascade-select:focus {
+            outline: none;
+            border-color: white;
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+        }
+        
+        .cascade-select option {
+            background: #667eea;
+            color: white;
+        }
+        
+        .cascade-info {
+            font-size: 0.75rem;
+            opacity: 0.8;
+            margin-top: 0.5rem;
+        }
+        
+        .model-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin: 1.5rem 0;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            padding: 1.25rem;
+            border-radius: 12px;
+            text-align: center;
+            color: white;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+        
+        .stat-label {
+            font-size: 0.875rem;
+            opacity: 0.9;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        
+        .live-monitor {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            padding: 1.5rem;
+            border-radius: 12px;
+            color: white;
+            margin: 1.5rem 0;
+        }
+        
+        .monitor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .monitor-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        
+        .monitor-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #38ef7d;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .monitor-metrics {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+        
+        .metric-item {
+            text-align: center;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+        }
+        
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+        
+        .metric-label {
+            font-size: 0.75rem;
+            opacity: 0.8;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #38ef7d 0%, #11998e 100%);
+            transition: width 0.3s ease;
+        }
+        
+        .benchmark-results {
+            margin: 1.5rem 0;
+        }
+        
+        .benchmark-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+        }
+        
+        .benchmark-name {
+            font-size: 0.9rem;
+        }
+        
+        .benchmark-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            color: #38ef7d;
+        }
+        
+        .explorer-section {
+            margin: 2rem 0;
+        }
+        
+        .explorer-card {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            padding: 1.5rem;
+            border-radius: 12px;
+            color: white;
+            margin-bottom: 1rem;
+        }
+        
+        .explorer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .explorer-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+        
+        .explorer-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+        }
+        
+        .explorer-stat {
+            text-align: center;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+        }
+        
+        .explorer-stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        
+        .explorer-stat-label {
+            font-size: 0.75rem;
+            opacity: 0.9;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
         <header class="fade-in">
             <div class="logo">
                 <div class="logo-icon">🎙️</div>
-                <h1>SileroTTS</h1>
+                <h1>SileroTTS <span style="color: #38ef7d;">v1.0</span></h1>
             </div>
-            <p class="subtitle">High-Quality Text-to-Speech API</p>
-            <span class="version-badge">Version 0.8</span>
+            <p class="subtitle">Smart speech synth in realtime</p>
+            <span class="version-badge" style="background: linear-gradient(135deg, #38ef7d 0%, #11998e 100%);">NEW</span>
         </header>
 
+        <!-- Live System Monitor -->
+        <div class="live-monitor">
+            <div class="monitor-header">
+                <span class="monitor-title">📊 Server Stats</span>
+                <div class="monitor-status">
+                    <div class="status-dot"></div>
+                    <span>Live</span>
+                </div>
+            </div>
+            <div class="monitor-metrics">
+                <div class="metric-item">
+                    <div class="metric-value" id="cpuValue">--</div>
+                    <div class="metric-label">CPU Usage</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="cpuProgress" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="memoryValue">--</div>
+                    <div class="metric-label">Memory Usage</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="memoryProgress" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="diskValue">--</div>
+                    <div class="metric-label">Disk Usage</div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="diskProgress" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value" id="uptimeValue">--</div>
+                    <div class="metric-label">Server Uptime</div>
+                </div>
+            </div>
+        </div>
+
         <div class="main-grid">
-            <!-- Input Panel -->
+            <!-- Main TTS Panel -->
             <div class="card slide-in-left">
                 <div class="card-header">
-                    <div class="card-icon">📝</div>
-                    <h2 class="card-title">Generate Speech</h2>
+                    <div class="card-icon">🎯</div>
+                    <h2 class="card-title">Speechize</h2>
                 </div>
 
-                <!-- Endpoint Selection -->
-                <div class="endpoint-tabs">
-                    <button class="endpoint-tab active" data-endpoint="audio">File Response</button>
-                    <button class="endpoint-tab" data-endpoint="stream">Streaming</button>
-                    <button class="endpoint-tab" data-endpoint="json">JSON (Base64)</button>
+                <!-- Cascading Model Selection -->
+                <div class="cascading-select">
+                    <div class="cascade-step active" id="stepLanguage">
+                        <div class="cascade-number">step 1</div>
+                        <div class="cascade-title">choose language</div>
+                        <select class="cascade-select" id="languageSelect">
+                            <option value="" disabled selected>-- +++ --</option>
+                            <option value="ru">🇷🇺 Русский</option>
+                            <option value="en">🇬🇧 English</option>
+                            <option value="de">🇩🇪 Deutsch</option>
+                            <option value="es">🇪🇸 Español</option>
+                            <option value="fr">🇫🇷 Français</option>
+                            <option value="uk">🇺🇦 Українська</option>
+                            <option value="uz">🇺🇿 O'zbek</option>
+                        </select>
+                        <div class="cascade-info" id="languageInfo">LANGUAGE</div>
+                    </div>
+
+                    <div class="cascade-step disabled" id="stepModel">
+                        <div class="cascade-number">step 2</div>
+                        <div class="cascade-title">choose model</div>
+                        <select class="cascade-select" id="modelSelect" disabled>
+                            <option value="" disabled selected>-- +++ --</option>
+                        </select>
+                        <div class="cascade-info" id="modelInfo">MODELS</div>
+                    </div>
+
+                    <div class="cascade-step disabled" id="stepSpeaker">
+                        <div class="cascade-number">step 3</div>
+                        <div class="cascade-title">choose speaker</div>
+                        <select class="cascade-select" id="speakerSelect" disabled>
+                            <option value="" disabled selected>-- +++ --</option>
+                        </select>
+                        <div class="cascade-info" id="speakerInfo">SPEAKER</div>
+                    </div>
+                </div>
+
+                <!-- Model Stats -->
+                <div class="model-stats" id="modelStats" style="display: none;">
+                    <div class="stat-card">
+                        <div class="stat-value" id="speakersCount">--</div>
+                        <div class="stat-label">speakers</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="sampleRatesCount">--</div>
+                        <div class="stat-label">samplerate</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="modelIdDisplay">--</div>
+                        <div class="stat-label">model</div>
+                    </div>
                 </div>
 
                 <div class="form-group">
-                    <label for="text">Text to Convert</label>
-                    <textarea id="text" placeholder="Enter text to convert to speech...">Hello! This is a test of the Silero TTS system.</textarea>
+                    <label for="textInput">the synth text</label>
+                    <textarea id="textInput" 
+                              placeholder="Convert text into just speech"
+                              style="height: 120px;">Text to synth</textarea>
                 </div>
 
                 <div class="quick-actions">
-                    <button class="quick-btn" data-sample="Hello! This is a test of the Silero TTS system.">English</button>
-                    <button class="quick-btn" data-sample="Привет! Это тест системы синтеза речи Silero.">Russian</button>
-                    <button class="quick-btn" data-sample="Hallo! Dies ist ein Test des Silero TTS-Systems.">German</button>
-                    <button class="quick-btn" data-sample="¡Hola! Esta es una prueba del sistema Silero TTS.">Spanish</button>
+                    <button class="quick-btn" data-sample="Привет! Это тест системы синтеза речи SileroTTS.">🇷🇺 Русский</button>
+                    <button class="quick-btn" data-sample="Hello! This is a test of the SileroTTS system.">🇬🇧 English</button>
+                    <button class="quick-btn" data-sample="Hallo! Dies ist ein Test des SileroTTS-Systems.">🇩🇪 Deutsch</button>
+                    <button class="quick-btn" data-sample="¡Hola! Esta es una prueba del sistema SileroTTS.">🇪🇸 Español</button>
                 </div>
 
-                <div class="settings-grid" style="margin-top: 1.5rem;">
-                    <div class="form-group">
-                        <label for="language">Language</label>
-                        <select id="language">
-                            <option value="ru" selected>Russian (Русский)</option>
-                            <option value="en">English</option>
-                            <option value="de">German (Deutsch)</option>
-                            <option value="es">Spanish (Español)</option>
-                            <option value="fr">French (Français)</option>
-                            <option value="uk">Ukrainian (Українська)</option>
-                            <option value="uz">Uzbek (O'zbek)</option>
-                            <option value="tt">Tatar (Татар)</option>
-                            <option value="ba">Bashkir (Башҡорт)</option>
-                            <option value="xal">Kalmyk (Хальмг)</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="model">Model</label>
-                        <select id="model">
-                            <option value="">Loading...</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="speaker">Speaker</label>
-                        <select id="speaker">
-                            <option value="">Loading...</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="device">Device</label>
-                        <select id="device">
-                            <option value="cpu" selected>CPU</option>
-                            <option value="cuda">CUDA (GPU)</option>
-                            <option value="auto">Auto</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>Sample Rate: <span class="range-value" id="sampleRateValue">48000</span> Hz</label>
-                    <div class="range-container">
-                        <input type="range" id="sampleRate" min="8000" max="48000" step="1000" value="48000">
-                    </div>
-                </div>
-
-                <button class="btn btn-primary" id="generateBtn">
+                <button class="btn btn-primary" id="generateBtn" style="margin-top: 1.5rem;">
                     <span id="btnIcon">🔊</span>
-                    <span id="btnText">Generate Speech</span>
+                    <span id="btnText">synth</span>
                 </button>
 
-                <div class="status" id="status"></div>
+                <div class="status" id="status" style="margin-top: 1rem;"></div>
 
-                <!-- Audio Player (SoundCloud Style) -->
-                <div class="audio-player sc-player-main" id="audioPlayer">
+                <!-- Audio Player -->
+                <div class="audio-player sc-player-main" id="audioPlayer" style="margin-top: 1.5rem;">
                     <div class="sc-player-header">
-                        <span class="sc-player-title">Current Output</span>
-                        <span id="audioFormat">Sample Rate: 48000 Hz</span>
+                        <span class="sc-player-title">result</span>
+                        <span id="audioFormat">Sample Rate: -- Hz</span>
                     </div>
                     <div class="sc-player-waveform" id="audioPlayerWaveform">
                         <div class="sc-waveform-static">
-                            <div class="sc-waveform-bar"></div>
-                            <div class="sc-waveform-bar"></div>
-                            <div class="sc-waveform-bar"></div>
                             <div class="sc-waveform-bar"></div>
                             <div class="sc-waveform-bar"></div>
                             <div class="sc-waveform-bar"></div>
@@ -133,19 +427,42 @@
                     </div>
                     <audio id="audioElement" style="display:none"></audio>
                     <div class="sc-player-actions">
-                        <button class="btn btn-small btn-secondary" id="downloadBtn">⬇️ Download</button>
+                        <button class="btn btn-small btn-secondary" id="downloadBtn">⬇️ download</button>
                         <button class="btn btn-small btn-secondary btn-icon" id="copyUrlBtn" title="Copy URL">🔗</button>
                     </div>
                 </div>
             </div>
 
-            <!-- Settings & Info Panel -->
+            <!-- Right Panel: Analytics & Settings -->
             <div>
-                <!-- Current Settings -->
+                <!-- System Explorer -->
+                <div class="explorer-section">
+                    <div class="explorer-card">
+                        <div class="explorer-header">
+                            <span class="explorer-title">🔍 Server state</span>
+                        </div>
+                        <div class="explorer-stats">
+                            <div class="explorer-stat">
+                                <div class="explorer-stat-value" id="totalModels">--</div>
+                                <div class="explorer-stat-label">models</div>
+                            </div>
+                            <div class="explorer-stat">
+                                <div class="explorer-stat-value" id="totalLanguages">--</div>
+                                <div class="explorer-stat-label">languages</div>
+                            </div>
+                            <div class="explorer-stat">
+                                <div class="explorer-stat-value" id="jitExcluded">--</div>
+                                <div class="explorer-stat-label">JIT excluded</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings -->
                 <div class="card slide-in-right" style="margin-bottom: 2rem;">
                     <div class="card-header">
                         <div class="card-icon">⚙️</div>
-                        <h2 class="card-title">Settings</h2>
+                        <h2 class="card-title">settings</h2>
                     </div>
 
                     <div class="toggle-group">
@@ -162,81 +479,579 @@
                     </div>
 
                     <div class="form-group" style="margin-top: 1rem;">
-                        <label for="numThreads">Threads: <span id="threadsValue">6</span></label>
+                        <label for="numThreads"> threads: <span id="threadsValue">2</span></label>
                         <div class="range-container">
                             <input type="range" id="numThreads" min="1" max="16" value="6">
                         </div>
                     </div>
 
+                    <div class="form-group">
+                        <label>samplerate: <span class="range-value" id="sampleRateValue">48000</span> Hz</label>
+                        <div class="range-container">
+                            <input type="range" id="sampleRate" min="8000" max="48000" step="1000" value="48000">
+                        </div>
+                    </div>
+
                     <button class="btn btn-secondary" id="applySettingsBtn" style="width: 100%; margin-top: 1rem;">
-                        Apply Settings
+                        apply
                     </button>
                 </div>
 
-                <!-- API Info -->
+                <!-- Benchmark Results -->
                 <div class="card slide-in-right">
                     <div class="card-header">
-                        <div class="card-icon">📡</div>
-                        <h2 class="card-title">API Reference</h2>
+                        <div class="card-icon">⚡</div>
+                        <h2 class="card-title">benchmark</h2>
                     </div>
-
-                    <div class="form-group">
-                        <label>Base URL</label>
-                        <input type="text" id="baseUrl" value="" readonly>
-                    </div>
-
-                    <div class="code-block">
-                        <div id="curlExample">
-<span class="code-comment"># Generate audio file</span>
-<span class="code-keyword">curl</span> -X POST <span class="code-string">"http://localhost:8002/tts/audio"</span> \
-  -H <span class="code-string">"Content-Type: application/json"</span> \
-  -d <span class="code-string">'{
-    "text": "Hello World",
-    "language": "en"
-  }'</span> -o <span class="code-property">audio.wav</span>
+                    <div class="benchmark-results" id="benchmarkResults">
+                        <div class="benchmark-item">
+                            <span class="benchmark-name">load model</span>
+                            <span class="benchmark-value" id="benchmarkLoadTime">--</span>
+                        </div>
+                        <div class="benchmark-item">
+                            <span class="benchmark-name">synth (avg)</span>
+                            <span class="benchmark-value" id="benchmarkGenTime">--</span>
+                        </div>
+                        <div class="benchmark-item">
+                            <span class="benchmark-name">RTF</span>
+                            <span class="benchmark-value" id="benchmarkRtf">--</span>
                         </div>
                     </div>
-
-                    <div class="code-block">
-                        <div id="jsExample">
-<span class="code-comment">// JavaScript/Fetch</span>
-<span class="code-keyword">const</span> response = <span class="code-keyword">await</span> fetch(<span class="code-string">'http://localhost:8002/tts/audio'</span>, {
-  method: <span class="code-string">'POST'</span>,
-  headers: { <span class="code-property">'Content-Type'</span>: <span class="code-string">'application/json'</span> },
-  body: JSON.stringify({
-    text: <span class="code-string">'Hello World'</span>,
-    language: <span class="code-string">'en'</span>
-  })
-});
-<span class="code-keyword">const</span> blob = <span class="code-keyword">await</span> response.blob();
-                        </div>
-                    </div>
-
-                    <div class="quick-actions">
-                        <button class="quick-btn" id="refreshModelsBtn">🔄 Refresh Models</button>
-                        <button class="quick-btn" id="clearCacheBtn">🗑️ Clear Cache</button>
-                    </div>
+                    <button class="btn btn-secondary" id="runBenchmarkBtn" style="width: 100%; margin-top: 1rem;">
+                        🚀 benchmark
+                    </button>
                 </div>
             </div>
         </div>
- 
+
         <footer>
-            <p>SileroTTS API Server • <a href="/docs" target="_blank">OpenAPI Docs</a> • <a href="/models">Available Models</a></p>
+            <p>SileroTTS API Server v1.0 • <a href="/docs" target="_blank">OpenAPI Docs</a> • <a href="/data">analytics</a> • <a href="/api/models/metadata">Metadata API</a></p>
         </footer>
 
-        <!-- History Section -->
-        <div class="history-section card slide-in-up" id="historyContainer">
-            <div class="history-placeholder">
-                <div class="history-placeholder-icon">📋</div>
-                <p>Your generation history will appear here</p>
+        <!-- Generated Audio History -->
+        <div class="card slide-in-up" style="margin-top: 2rem;">
+            <div class="card-header">
+                <div class="card-icon">🎵</div>
+                <h2 class="card-title">generate history</h2>
+                <button class="btn btn-small btn-secondary" id="clearHistoryBtn" style="margin-left: auto;">Очистить</button>
+            </div>
+            <div id="historyContainer" style="max-height: 400px; overflow-y: auto;">
+                <div class="history-placeholder" id="historyPlaceholder">
+                    <div class="history-placeholder-icon">📋</div>
+                    <p>generated audio here</p>
+                </div>
+                <div class="history-list" id="historyList" style="display: none;"></div>
             </div>
         </div>
     </div>
 
+    <style>
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            padding: 0.5rem;
+        }
+
+        .history-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border-radius: 10px;
+            animation: slideInLeft 0.3s ease;
+            transition: all 0.3s;
+        }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .history-item:hover {
+            background: var(--bg-secondary);
+            transform: translateX(4px);
+        }
+
+        .history-item.playing {
+            border: 2px solid var(--primary);
+            box-shadow: 0 0 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .history-play-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
+            border: none;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .history-play-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .history-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .history-text {
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 0.25rem;
+        }
+
+        .history-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: flex;
+            gap: 1rem;
+        }
+
+        .history-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .history-action-btn {
+            padding: 0.5rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .history-action-btn:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .history-waveform {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            height: 30px;
+            min-width: 60px;
+        }
+
+        .history-wavebar {
+            width: 3px;
+            background: var(--primary);
+            border-radius: 2px;
+            animation: waveAnimation 1s ease-in-out infinite;
+        }
+
+        @keyframes waveAnimation {
+            0%, 100% { height: 10px; }
+            50% { height: 25px; }
+        }
+
+        .history-wavebar:nth-child(1) { animation-delay: 0.0s; }
+        .history-wavebar:nth-child(2) { animation-delay: 0.1s; }
+        .history-wavebar:nth-child(3) { animation-delay: 0.2s; }
+        .history-wavebar:nth-child(4) { animation-delay: 0.3s; }
+        .history-wavebar:nth-child(5) { animation-delay: 0.4s; }
+        .history-wavebar:nth-child(6) { animation-delay: 0.5s; }
+        .history-wavebar:nth-child(7) { animation-delay: 0.6s; }
+        .history-wavebar:nth-child(8) { animation-delay: 0.7s; }
+
+        .history-placeholder {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-muted);
+        }
+
+        .history-placeholder-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+    </style>
+
     <script>
-        // Set base URL dynamically
-        document.getElementById('baseUrl').value = location.origin;
+        // Global state
+        let modelsData = {};
+        let selectedLanguage = null;
+        let selectedModel = null;
+        let selectedSpeaker = null;
+        let currentAudioUrl = null;
+        let audioHistory = [];
+        let currentPlayingIndex = -1;
+
+        // Load models on startup
+        async function loadModels() {
+            try {
+                const response = await fetch('/api/models/metadata');
+                const result = await response.json();
+                
+                if (result.success) {
+                    modelsData = result.data;
+                    updateExplorerStats();
+                }
+            } catch (error) {
+                console.error('Error loading models:', error);
+            }
+        }
+
+        function updateExplorerStats() {
+            const languages = Object.keys(modelsData.languages || {});
+            const totalModels = modelsData.total_models || 0;
+            const jitExcluded = modelsData.jit_models_excluded || 0;
+            
+            document.getElementById('totalLanguages').textContent = languages.length;
+            document.getElementById('totalModels').textContent = totalModels;
+            document.getElementById('jitExcluded').textContent = jitExcluded;
+        }
+
+        // Real-time monitoring
+        async function updateSystemStats() {
+            try {
+                const response = await fetch('/api/monitoring/realtime');
+                const stats = await response.json();
+                
+                document.getElementById('cpuValue').textContent = stats.cpu_percent + '%';
+                document.getElementById('cpuProgress').style.width = stats.cpu_percent + '%';
+                
+                document.getElementById('memoryValue').textContent = stats.memory_percent + '%';
+                document.getElementById('memoryProgress').style.width = stats.memory_percent + '%';
+                
+                document.getElementById('diskValue').textContent = stats.disk_percent + '%';
+                document.getElementById('diskProgress').style.width = stats.disk_percent + '%';
+            } catch (error) {
+                console.error('Error updating system stats:', error);
+            }
+        }
+
+        // Cascading selection logic
+        document.getElementById('languageSelect').addEventListener('change', async (e) => {
+            selectedLanguage = e.target.value;
+            
+            // Mark step as completed
+            document.getElementById('stepLanguage').classList.add('completed');
+            document.getElementById('stepLanguage').classList.remove('active');
+            document.getElementById('stepModel').classList.remove('disabled');
+            document.getElementById('stepModel').classList.add('active');
+            
+            // Load models for selected language
+            const modelSelect = document.getElementById('modelSelect');
+            modelSelect.disabled = false;
+            modelSelect.innerHTML = '<option value="" disabled selected>-- +++ --</option>';
+            
+            try {
+                const response = await fetch(`/api/models?language=${selectedLanguage}&load_speakers=false`);
+                const result = await response.json();
+                
+                if (result.success && result.data[selectedLanguage]) {
+                    const models = Object.keys(result.data[selectedLanguage]);
+                    models.forEach(modelId => {
+                        const option = document.createElement('option');
+                        option.value = modelId;
+                        option.textContent = modelId;
+                        modelSelect.appendChild(option);
+                    });
+                    
+                    document.getElementById('languageInfo').textContent = `${models.length} Models`;
+                }
+            } catch (error) {
+                console.error('Error loading models:', error);
+            }
+        });
+
+        document.getElementById('modelSelect').addEventListener('change', async (e) => {
+            selectedModel = e.target.value;
+            
+            // Mark step as completed
+            document.getElementById('stepModel').classList.add('completed');
+            document.getElementById('stepModel').classList.remove('active');
+            document.getElementById('stepSpeaker').classList.remove('disabled');
+            document.getElementById('stepSpeaker').classList.add('active');
+            
+            // Load speakers for selected model
+            const speakerSelect = document.getElementById('speakerSelect');
+            speakerSelect.disabled = false;
+            speakerSelect.innerHTML = '<option value="" disabled selected>-- Голос --</option>';
+            
+            try {
+                const response = await fetch(`/api/models/${selectedLanguage}/${selectedModel}/speakers`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    const speakers = result.speakers || [];
+                    speakers.forEach(speaker => {
+                        const option = document.createElement('option');
+                        option.value = speaker;
+                        option.textContent = speaker;
+                        speakerSelect.appendChild(option);
+                    });
+                    
+                    // Update model stats
+                    document.getElementById('speakersCount').textContent = speakers.length;
+                    document.getElementById('sampleRatesCount').textContent = (result.sample_rates || []).length;
+                    document.getElementById('modelIdDisplay').textContent = selectedModel;
+                    document.getElementById('modelStats').style.display = 'grid';
+                    
+                    document.getElementById('modelInfo').textContent = `${speakers.length} Speakers`;
+                }
+            } catch (error) {
+                console.error('Error loading speakers:', error);
+            }
+        });
+
+        document.getElementById('speakerSelect').addEventListener('change', (e) => {
+            selectedSpeaker = e.target.value;
+            document.getElementById('stepSpeaker').classList.add('completed');
+            document.getElementById('speakerInfo').textContent = `Speaker: ${selectedSpeaker}`;
+        });
+
+        // Generate speech
+        document.getElementById('generateBtn').addEventListener('click', async () => {
+            const text = document.getElementById('textInput').value.trim();
+            
+            if (!text) {
+                showStatus('Type text', 'error');
+                return;
+            }
+            
+            if (!selectedLanguage || !selectedModel || !selectedSpeaker) {
+                showStatus('Choose Language | Model | Speaker', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('generateBtn');
+            btn.disabled = true;
+            document.getElementById('btnText').textContent = 'Working...';
+            
+            try {
+                const response = await fetch('/api/tts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: text,
+                        language: selectedLanguage,
+                        model_id: selectedModel,
+                        speaker: selectedSpeaker,
+                        sample_rate: parseInt(document.getElementById('sampleRate').value)
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    currentAudioUrl = result.audio_url || result.file_path;
+                    showStatus(`Generation for ${result.duration_seconds}s`, 'success');
+                    
+                    // Update audio player
+                    document.getElementById('audioFormat').textContent = `Sample Rate: ${result.sample_rate} Hz`;
+                    
+                    // Load audio using the URL (not file:// path)
+                    const audioElement = document.getElementById('audioElement');
+                    audioElement.src = currentAudioUrl;
+                    audioElement.load();
+                    
+                    console.log('Audio loaded from:', currentAudioUrl);
+                    
+                    // Auto-play if enabled
+                    const autoPlay = document.getElementById('autoPlay').getAttribute('data-value') === 'true';
+                    if (autoPlay) {
+                        await audioElement.play();
+                    }
+                } else {
+                    showStatus(`Ошибка: ${result.detail}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`Ошибка: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                document.getElementById('btnText').textContent = 'Synth';
+            }
+        });
+
+        function showStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+
+        // Quick sample buttons
+        document.querySelectorAll('.quick-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.getElementById('textInput').value = btn.getAttribute('data-sample');
+            });
+        });
+
+        // Run benchmark
+        document.getElementById('runBenchmarkBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('runBenchmarkBtn');
+            btn.disabled = true;
+            btn.textContent = 'Benchmarking...';
+            showStatus("This may download every model", "warn");
+            
+            try {
+                const response = await fetch('/api/benchmark/loading');
+                const result = await response.json();
+                
+                if (result.models) {
+                    let totalLoadTime = 0;
+                    let modelCount = 0;
+                    
+                    for (const lang in result.models) {
+                        for (const modelId in result.models[lang]) {
+                            const model = result.models[lang][modelId];
+                            if (model.status === 'success') {
+                                totalLoadTime += model.load_time_seconds;
+                                modelCount++;
+                            }
+                        }
+                    }
+                    
+                    const avgLoadTime = modelCount > 0 ? (totalLoadTime / modelCount).toFixed(3) : 0;
+                    document.getElementById('benchmarkLoadTime').textContent = `${avgLoadTime}s (avg)`;
+                }
+            } catch (error) {
+                console.error('Error running benchmark:', error);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🚀 Run benchmark (experimental)';
+            }
+        });
+
+        // Audio player controls
+        const audioPlayerPlayPause = document.getElementById('audioPlayerPlayPause');
+        const audioElement = document.getElementById('audioElement');
+        
+        audioPlayerPlayPause.addEventListener('click', () => {
+            if (audioElement.paused) {
+                audioElement.play();
+            } else {
+                audioElement.pause();
+            }
+        });
+        
+        audioElement.addEventListener('timeupdate', () => {
+            const progress = (audioElement.currentTime / audioElement.duration) * 100;
+            document.querySelector('.sc-progress-fill').style.width = progress + '%';
+            document.getElementById('audioPlayerCurrentTime').textContent = formatTime(audioElement.currentTime);
+        });
+        
+        audioElement.addEventListener('loadedmetadata', () => {
+            document.getElementById('audioDuration').textContent = `Duration: ${formatTime(audioElement.duration)}`;
+        });
+        
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Apply settings
+        document.getElementById('applySettingsBtn').addEventListener('click', async () => {
+            const settings = {
+                put_accent: document.getElementById('putAccent').getAttribute('data-value') === 'true',
+                put_yo: document.getElementById('putYo').getAttribute('data-value') === 'true',
+                auto_play: document.getElementById('autoPlay').getAttribute('data-value') === 'true',
+                num_threads: parseInt(document.getElementById('numThreads').value),
+                sample_rate: parseInt(document.getElementById('sampleRate').value),
+                device: 'cpu'
+            };
+            
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(settings)
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showStatus('Settings saved', 'success');
+                } else {
+                    showStatus('Error settings save', 'error');
+                }
+            } catch (error) {
+                showStatus(`Ошибка: ${error.message}`, 'error');
+            }
+        });
+
+        // Load settings on startup
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/settings');
+                const result = await response.json();
+                
+                if (result.success) {
+                    const settings = result.settings;
+                    
+                    document.getElementById('putAccent').setAttribute('data-value', settings.put_accent);
+                    document.getElementById('putYo').setAttribute('data-value', settings.put_yo);
+                    document.getElementById('autoPlay').setAttribute('data-value', settings.auto_play);
+                    document.getElementById('numThreads').value = settings.num_threads;
+                    document.getElementById('sampleRate').value = settings.sample_rate;
+                    
+                    document.getElementById('threadsValue').textContent = settings.num_threads;
+                    document.getElementById('sampleRateValue').textContent = settings.sample_rate;
+                }
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        }
+
+        // Download button
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            if (currentAudioUrl) {
+                const a = document.createElement('a');
+                a.href = currentAudioUrl;
+                a.download = 'tts_output.wav';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            } else {
+                showStatus('There is no audio to play', 'error');
+            }
+        });
+
+        // Sample rate slider
+        document.getElementById('sampleRate').addEventListener('input', (e) => {
+            document.getElementById('sampleRateValue').textContent = e.target.value;
+        });
+
+        // Threads slider
+        document.getElementById('numThreads').addEventListener('input', (e) => {
+            document.getElementById('threadsValue').textContent = e.target.value;
+        });
+
+        // Toggle switches
+        document.querySelectorAll('.toggle').forEach(toggle => {
+            toggle.addEventListener('click', () => {
+                toggle.classList.toggle('active');
+                const currentValue = toggle.getAttribute('data-value') === 'true';
+                toggle.setAttribute('data-value', !currentValue);
+            });
+        });
+
+        // Initialize
+        loadModels();
+        loadSettings();
+        updateSystemStats();
+        setInterval(updateSystemStats, 2000);
     </script>
-    <script src="/static/app.js"></script>
 </body>
 </html>

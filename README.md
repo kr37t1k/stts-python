@@ -3,7 +3,7 @@
 **README is available in the following languages:**
 
 [![EN](https://img.shields.io/badge/EN-blue.svg)](https://github.com/kr37t1k/stts-python)
-[![RU](https://img.shields.io/badge/RU-red.svg)](https://github.com/kr37t1k/stts-python/blob/main/README_RU.MD)
+[![RU](https://img.shields.io/badge/RU-red.svg)](https://github.com/kr37t1k/stts-python/blob/main/README.RU.MD)
 
 Silero TTS is a Python library that provides an easy way to synthesize speech from text using various Silero TTS models, languages, and speakers. It can be used as a standalone script or integrated into your own Python projects.
 
@@ -20,24 +20,37 @@ Silero TTS is a Python library that provides an easy way to synthesize speech fr
 - Robust error handling and validation
 - Network resilience with retry mechanisms
 
+### API Server Features
+
+- **Web UI** - Modern responsive interface for TTS generation
+- **REST API** - Full REST API with multiple endpoints
+- **Streaming Support** - Real-time audio streaming
+- **History & Cache** - Automatic audio file caching and generation history
+- **Analytics Dashboard** - Comprehensive server monitoring and reachability analysis
+  - Real-time metrics (uptime, response time, success rate)
+  - Interactive charts and graphs
+  - Endpoint performance monitoring
+  - Error analysis and timeline
+  - Export/Import session data (JSON/CSV)
+  - Auto-refresh every 30 seconds
+
 ## Installation
 
-### Auto (Recommended)
-
-   ```
-   pip install stts-py3
-   ```
-
-### Manually
-
-1. Clone the repository:
-   ```
+### git+build
+   ```bash
    git clone https://github.com/kr37t1k/stts-python
+   python -m build
+   python -m pip install "dist/silerotts-VTag-py3-none-any.whl"
    ```
 
-2. Install the required dependencies:
+### By pip within git:
+   ```bash
+   python -m pip install "git+https://github.com/kr37t1k/stts-python"
    ```
-   pip install -r requirements.txt
+
+### By PyPI (simpler)
+   ```bash
+   python -m pip install stts-python
    ```
 
 ## Usage
@@ -156,6 +169,181 @@ The Silero TTS CLI provides the following features:
 - **Speaker Listing**: List all available speakers for a specific model using the `--list-speakers` flag.
 - **Error Handling**: Comprehensive error handling with retry mechanisms for network operations.
 
+## API Server
+
+The SileroTTS API Server provides a web-based interface and REST API for text-to-speech generation.
+
+1. Run the server
+   ```batch
+   python -m stts --server
+   ```
+   
+2. Access the web UI:
+   - Main UI: http://localhost:8002
+   - Models Info: http://localhost:8002/models
+   - Analytics Dashboard: http://localhost:8002/data
+
+### API Endpoints
+
+#### TTS Generation
+- `POST /tts` - Generate audio (returns base64 encoded JSON)
+- `POST /tts/audio` - Generate audio (returns audio file)
+- `POST /tts/stream` - Stream audio response
+- `GET /tts/audio` - GET version for browser testing
+- `GET /tts/stream` - GET version for browser testing
+
+#### Management
+- `GET /models` - Get available models and speakers
+- `GET /speakers` - Get available speakers for language/model
+- `GET /settings` - Get current TTS settings
+- `POST /settings` - Update TTS settings
+- `GET /history` - Get generation history
+- `DELETE /cache` - Clear audio cache
+- `GET /cache` - Get cache information
+
+### Analytics API Endpoints
+
+#### Analytics Data
+- `GET /api/analytics` - Get all analytics data
+- `GET /api/analytics/export?format=json|csv&limit=1000` - Export data (JSON/CSV)
+- `POST /api/analytics/import` - Import session data
+- `DELETE /api/analytics` - Clear analytics
+- `POST /api/analytics/check` - Record manual reachability check
+
+#### Health & Monitoring
+- `GET /api/health` - Basic health check (status, health_score)
+- `GET /api/health?detailed=true` - Detailed health check with metrics
+- `GET /api/metrics` - Prometheus-style metrics for monitoring
+- `GET /api/system/info` - System information (CPU, memory, disk, network)
+
+#### Performance & Statistics
+- `GET /api/performance` - Detailed performance statistics
+- `GET /api/endpoints` - Status of all tracked endpoints
+- `GET /api/history?limit=100&endpoint=/tts/audio` - Request history with filtering
+- `GET /api/stats/hourly?hours=24` - Hourly aggregated statistics
+
+### OpenAI-Compatible Endpoints
+
+#### Chat Completions (TTS wrapped in chat format)
+- `POST /v1/chat/completions` - Generate speech in chat completion format
+- `GET /v1/voices` - List available voices/speakers
+- `GET /v1/models` - List available models with speakers (OpenAI-compatible)
+
+```bash
+# Chat completion example:
+curl http://localhost:8002/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "v4_ru_kseniya_v2",
+    "messages": [
+      {"role": "user", "content": "Привет, как дела?"}
+    ],
+    "stream": false
+  }'
+```
+
+#### Voices List
+```bash
+# Get all available voices:
+curl http://localhost:8002/v1/voices
+```
+
+### Usage with CherryStudio/Jan
+
+1. **Add Custom Model**:
+   - Open CherryStudio/Jan settings
+   - Add custom API endpoint: `http://localhost:8002`
+   - Select TTS mode
+   - Choose voice from list (e.g., `v4_ru_kseniya_v2`)
+
+2. **Configuration**:
+   ```
+   API Base URL: http://localhost:8002
+   API Version: v1
+   Model: v4_ru_kseniya_v2 (or any available voice)
+   ```
+
+3. **Supported Clients**:
+   - ✅ CherryStudio
+   - ✅ Jan
+   - ✅ Open WebUI
+   - ✅ AnythingLLM
+   - ✅ LM Studio (with configuration)
+   - ✅ OpenAI-compatible apps
+
+### Analytics Dashboard
+
+The analytics dashboard provides comprehensive monitoring of server performance and reachability:
+
+**Key Features:**
+- Real-time metrics (uptime, response time, success rate)
+- System load monitoring (CPU, memory)
+- Response time trends and distribution
+- Endpoint performance tracking
+- Error analysis and timeline
+- Request volume statistics
+- Export/Import session data
+- Auto-refresh every 30 seconds
+
+**Metrics Tracked:**
+- Uptime percentage
+- Average response time
+- Success/error rates
+- CPU and memory usage
+- Request rates
+- Per-endpoint statistics
+
+**Data Export:**
+- JSON format for full data preservation
+- CSV format for spreadsheet analysis
+- Session import for comparison
+- Local storage in browser
+
+### Example API Usage
+
+```python
+import requests
+
+# Generate speech
+response = requests.post(
+    'http://localhost:8002/tts/audio',
+    json={
+        'text': 'Hello, world!',
+        'language': 'en'
+    }
+)
+
+# Save audio file
+with open('output.wav', 'wb') as f:
+    f.write(response.content)
+
+# Get analytics
+analytics = requests.get('http://localhost:8002/api/analytics').json()
+print(f"Uptime: {analytics['metrics']['uptime']}%")
+print(f"Avg Response: {analytics['metrics']['avgResponseTime']}ms")
+```
+
+### Streaming Example
+
+```python
+import requests
+
+# Stream audio
+response = requests.post(
+    'http://localhost:8002/tts/stream',
+    json={
+        'text': 'Hello, world!',
+        'language': 'en'
+    },
+    stream=True
+)
+
+# Play audio in real-time
+with open('output.wav', 'wb') as f:
+    for chunk in response.iter_content(chunk_size=8192):
+        f.write(chunk)
+```
+
 ## Supported Languages
 
 - Russian (ru)
@@ -188,4 +376,4 @@ This project is licensed under the [MIT License](LICENSE).
 ## Acknowledgements
 
 - [Silero Models](https://github.com/snakers4/silero-models) big thanks for providing the free TTS models
-- [silero_tts_standalone](https://github.com/S-trace/silero_tts_standalone) this library inspired daswer123 to create his (daswer123/silero-tts-enhanced) project. I made fork from his project and remade it for my own mind, wow its working, huh👽🪰!
+- [silero_tts_standalone](https://github.com/S-trace/silero_tts_standalone) this library inspired daswer123 to create his (daswer123/silero-tts-enhanced) project. We made fork from his project and remade it for own.
